@@ -66,9 +66,13 @@ struct ControlClientTests {
         try tmux("select-window", "-t", first)
         #expect(await waitUntil { store.activeID == first })
 
-        // The title follows the focused split.
+        // The title follows the focused split, and the pane count follows
+        // splits.
         try tmux("split-window", "-t", first, "cat")
         #expect(await waitUntil { store.windows.first?.title == "cat" })
+        #expect(store.windows.first?.paneCount == 2)
+        try tmux("split-window", "-d", "-t", first, "cat")
+        #expect(await waitUntil { store.windows.first?.paneCount == 3 })
         try tmux("select-pane", "-t", "\(first).0")
         #expect(await waitUntil { store.windows.first?.title == "sleep" })
 

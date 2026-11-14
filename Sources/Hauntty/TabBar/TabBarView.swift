@@ -16,6 +16,7 @@ struct TabBarView: View {
             ForEach(store.windows) { window in
                 TabButton(
                     title: window.title,
+                    paneCount: window.paneCount,
                     isActive: window.id == store.activeID,
                     foreground: foreground,
                     namespace: namespace,
@@ -41,6 +42,7 @@ struct TabBarView: View {
 
 private struct TabButton: View {
     let title: String
+    let paneCount: Int
     let isActive: Bool
     let foreground: Color
     let namespace: Namespace.ID
@@ -49,11 +51,18 @@ private struct TabButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .foregroundStyle(foreground.opacity(isActive ? 1 : 0.6))
+        HStack(spacing: 6) {
+            PaneStackIcon(
+                symbol: ProcessIcon.symbol(for: title),
+                paneCount: paneCount,
+                color: foreground)
+            Text(title)
+                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+            .foregroundStyle(foreground)
+            .opacity(isActive ? 1 : 0.6)
             .padding(.horizontal, 12)
             .frame(maxWidth: 160, maxHeight: .infinity)
             .background {

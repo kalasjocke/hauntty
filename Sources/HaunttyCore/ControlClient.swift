@@ -183,7 +183,7 @@ public final class ControlClient {
                 guard id == sessionID else { return }
                 store.setActive(windowID)
                 reload()
-            case .windowAdd, .windowClose, .windowPaneChanged, .subscriptionChanged:
+            case .windowAdd, .windowClose, .windowPaneChanged, .layoutChange, .subscriptionChanged:
                 reload()
             case .exit, .other:
                 break

@@ -7,11 +7,13 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
     public var index: Int
     /// The process running in the window's focused pane.
     public var title: String
+    public var paneCount: Int
 
-    public init(id: String, index: Int, title: String) {
+    public init(id: String, index: Int, title: String, paneCount: Int = 1) {
         self.id = id
         self.index = index
         self.title = title
+        self.paneCount = paneCount
     }
 }
 
@@ -25,7 +27,7 @@ public final class TabStore {
     /// The `list-windows -F` format that `applyWindowList` reads. The title
     /// is last so it may contain the separator.
     public static let windowListFormat =
-        "#{window_id}|#{window_index}|#{window_active}|#{pane_current_command}"
+        "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{pane_current_command}"
 
     public init() {}
 
@@ -34,9 +36,12 @@ public final class TabStore {
         var parsed: [TmuxWindow] = []
         var active: String?
         for line in lines {
-            let fields = line.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
-            guard fields.count == 4, fields[0].hasPrefix("@"), let index = Int(fields[1]) else { continue }
-            let window = TmuxWindow(id: String(fields[0]), index: index, title: String(fields[3]))
+            let fields = line.split(separator: "|", maxSplits: 4, omittingEmptySubsequences: false)
+            guard fields.count == 5, fields[0].hasPrefix("@"),
+                  let index = Int(fields[1]), let paneCount = Int(fields[3])
+            else { continue }
+            let window = TmuxWindow(
+                id: String(fields[0]), index: index, title: String(fields[4]), paneCount: paneCount)
             parsed.append(window)
             if fields[2] == "1" { active = window.id }
         }
