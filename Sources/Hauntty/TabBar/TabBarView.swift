@@ -1,8 +1,9 @@
 import HaunttyCore
 import SwiftUI
 
-/// One tab per tmux window, in equal widths across the top of the window.
-/// The active tab sits on a liquid glass capsule that slides between tabs.
+/// One tab per tmux window, up to 160 points wide each, inside a translucent
+/// grey capsule. The active tab sits on a lighter capsule that slides between
+/// tabs.
 struct TabBarView: View {
     let store: TabStore
     let foreground: Color
@@ -11,7 +12,7 @@ struct TabBarView: View {
     @Namespace private var namespace
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(store.windows) { window in
                 TabButton(
                     title: window.title,
@@ -22,8 +23,11 @@ struct TabBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(3)
+        .background(Capsule().fill(foreground.opacity(0.08)))
+        .padding(.horizontal, 12)
+        .padding(.top, 3)
+        .padding(.bottom, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         // The titlebar is hidden, so the tab bar is where the window is moved
@@ -51,15 +55,14 @@ private struct TabButton: View {
             .truncationMode(.middle)
             .foregroundStyle(foreground.opacity(isActive ? 1 : 0.6))
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: 160, maxHeight: .infinity)
             .background {
                 if isActive {
                     Capsule()
-                        .fill(.clear)
-                        .glassEffect(.regular, in: .capsule)
+                        .fill(foreground.opacity(0.14))
                         .matchedGeometryEffect(id: "active", in: namespace)
                 } else if isHovered {
-                    Capsule().fill(foreground.opacity(0.08))
+                    Capsule().fill(foreground.opacity(0.06))
                 }
             }
             .contentShape(.capsule)
