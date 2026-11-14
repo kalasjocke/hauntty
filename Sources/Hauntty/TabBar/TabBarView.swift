@@ -1,9 +1,9 @@
 import HaunttyCore
 import SwiftUI
 
-/// One tab per tmux window, up to 160 points wide each, inside a translucent
-/// grey capsule. The active tab sits on a lighter capsule that slides between
-/// tabs.
+/// One tab per tmux window, each as wide as its icon and title but no wider
+/// than 225 points, inside a translucent grey capsule. The active tab sits on
+/// a lighter capsule that slides between tabs.
 struct TabBarView: View {
     let store: TabStore
     let foreground: Color
@@ -29,8 +29,11 @@ struct TabBarView: View {
         .padding(3)
         .background(Capsule().fill(foreground.opacity(0.08)))
         .padding(.horizontal, 12)
+        // The terminal adds its own top padding below the bar (2 points with
+        // `window-padding-y = 2,0`), so 1 point here leaves the same 3 point
+        // gap below the bar as above it.
         .padding(.top, 3)
-        .padding(.bottom, 6)
+        .padding(.bottom, 1)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         // The titlebar is hidden, so the tab bar is where the window is moved
@@ -53,23 +56,30 @@ private struct TabButton: View {
 
     @State private var isHovered = false
 
+    private let iconGap: CGFloat = 6
+
     var body: some View {
-        HStack(spacing: 6) {
-            PaneStackIcon(
-                symbol: ProcessIcon.symbol(for: title),
-                paneCount: paneCount,
-                status: status,
-                color: foreground,
-                tileOpacity: isActive ? 1 : 0.6)
-            Text(title)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .opacity(isActive ? 1 : 0.6)
+        MaxWidth(225) {
+            HStack(spacing: iconGap) {
+                PaneStackIcon(
+                    symbol: ProcessIcon.symbol(for: title),
+                    paneCount: paneCount,
+                    status: status,
+                    color: foreground,
+                    tileOpacity: isActive ? 1 : 0.6)
+                // Size for the bold title, so the tab keeps its width when it
+                // becomes active.
+                title(weight: .semibold)
+                    .hidden()
+                    .overlay(alignment: .leading) {
+                        title(weight: isActive ? .semibold : .regular)
+                            .opacity(isActive ? 1 : 0.6)
+                    }
+            }
+            .padding(.horizontal, 3 * iconGap)
         }
             .foregroundStyle(foreground)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: 160, maxHeight: .infinity)
+            .frame(maxHeight: .infinity)
             .background {
                 if isActive {
                     Capsule()
@@ -85,5 +95,31 @@ private struct TabButton: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { onSelect() }
+    }
+
+    private func title(weight: Font.Weight) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: weight))
+            .lineLimit(1)
+            .truncationMode(.middle)
+    }
+}
+
+/// Sizes its content to fit, but no wider than `maxWidth`. Unlike
+/// `.frame(maxWidth:)`, it does not grow to fill the space it is offered.
+private struct MaxWidth: Layout {
+    let maxWidth: CGFloat
+
+    init(_ maxWidth: CGFloat) {
+        self.maxWidth = maxWidth
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = min(proposal.width ?? .infinity, maxWidth)
+        return subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: proposal.height)) ?? .zero
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
