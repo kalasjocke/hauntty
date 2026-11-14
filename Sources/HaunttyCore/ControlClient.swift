@@ -28,17 +28,15 @@ public final class ControlClient {
     private var retryDelay: TimeInterval = ControlClient.minimumRetryDelay
     private var reloadInFlight = false
     private var reloadQueued = false
-    /// The window whose done status is being cleared, so it is cleared once.
-    private var clearingID: String?
 
     private static let minimumRetryDelay: TimeInterval = 0.1
     private static let maximumRetryDelay: TimeInterval = 2
 
     /// Subscription that reports each window's index, status, focused process
-    /// and title. A change reloads the window list. tmux checks it at most
+    /// and title, which the store applies directly. tmux checks it at most
     /// once a second.
-    static let subscription =
-        "hauntty-tabs:@*:#{window_index} #{@hauntty-status} #{pane_current_command} " + TabStore.titleFormat
+    static let subscription = "\(subscriptionName):@*:" + TabStore.reportFormat
+    static let subscriptionName = "hauntty-tabs"
 
     /// - Parameters:
     ///   - executable: Path to tmux, or a bare name to look up in PATH.
@@ -153,7 +151,6 @@ public final class ControlClient {
         attached = false
         reloadInFlight = false
         reloadQueued = false
-        clearingID = nil
     }
 
     // MARK: Protocol
@@ -188,7 +185,15 @@ public final class ControlClient {
                 guard id == sessionID else { return }
                 store.setActive(windowID)
                 reload()
-            case .windowAdd, .windowClose, .windowRenamed, .windowPaneChanged, .layoutChange,
+            case .subscriptionChanged(Self.subscriptionName, let windowID?, let value):
+                switch store.applyReport(windowID: windowID, value: value) {
+                case .applied: clearDoneInActiveWindow()
+                case .needsReload: reload()
+                }
+            case .windowRenamed(let windowID, let name):
+                store.applyRename(windowID: windowID, name: name)
+                reload()
+            case .windowAdd, .windowClose, .windowPaneChanged, .layoutChange,
                  .subscriptionChanged:
                 reload()
             case .exit, .other:
@@ -225,14 +230,9 @@ public final class ControlClient {
     private func clearDoneInActiveWindow() {
         guard let id = store.activeID,
               store.windows.first(where: { $0.id == id })?.status == .done
-        else {
-            clearingID = nil
-            return
-        }
-        guard clearingID != id else { return }
-        clearingID = id
+        else { return }
         send("set-option -w -u -t \(id) @hauntty-status")
-        reload()
+        store.clearStatus(id)
     }
 
     private func send(_ command: String, reply: @escaping (ControlReply) -> Void = { _ in }) {

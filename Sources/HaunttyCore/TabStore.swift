@@ -50,6 +50,26 @@ public final class TabStore {
     public private(set) var windows: [TmuxWindow] = []
     public private(set) var activeID: String?
 
+    /// The fields the tmux subscription last reported, by window id.
+    ///
+    /// tmux only reports a value that differs from the one it last sent. A
+    /// reload can show a newer value the subscription never sent, and if
+    /// the value then changes back, tmux reports nothing. So once the
+    /// subscription has reported a window, its fields win over reloads.
+    private var reported: [String: Report] = [:]
+
+    fileprivate struct Report: Equatable {
+        var index: Int
+        var status: WindowStatus?
+        var command: String
+        var title: String
+    }
+
+    /// What the tmux subscription reports for each window, read by
+    /// `applyReport`. The title is last so it may contain the separator.
+    public static let reportFormat =
+        "#{window_index}|#{@hauntty-status}|#{pane_current_command}|" + titleFormat
+
     /// The tab title: the window name, as tmux's own status bar shows it.
     /// tmux keeps it set to the focused process while `automatic-rename` is
     /// on, following `automatic-rename-format`.
@@ -81,10 +101,11 @@ public final class TabStore {
                 id: String(fields[0]), index: index, title: String(fields[6]),
                 command: String(fields[5]), paneCount: paneCount,
                 status: WindowStatus(rawValue: String(fields[4])))
-            parsed.append(window)
+            parsed.append(window.applying(reported[window.id]))
             if fields[2] == "1" { active = window.id }
         }
         parsed.sort { $0.index < $1.index }
+        reported = reported.filter { id, _ in parsed.contains { $0.id == id } }
 
         // Assign only on change, so observers do not redraw or animate for
         // reloads that change nothing.
@@ -92,9 +113,65 @@ public final class TabStore {
         if let active, active != activeID { activeID = active }
     }
 
+    public enum ReportResult: Equatable {
+        case applied
+        /// The window is new or moved, so the window list needs a reload.
+        case needsReload
+    }
+
+    /// Apply a subscription value in `reportFormat` for one window.
+    public func applyReport(windowID: String, value: String) -> ReportResult {
+        let fields = value.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
+        guard fields.count == 4, let index = Int(fields[0]) else { return .needsReload }
+        let report = Report(
+            index: index, status: WindowStatus(rawValue: String(fields[1])),
+            command: String(fields[2]), title: String(fields[3]))
+        reported[windowID] = report
+        guard let position = windows.firstIndex(where: { $0.id == windowID }),
+              windows[position].index == index
+        else { return .needsReload }
+        let window = windows[position].applying(report)
+        if window != windows[position] { windows[position] = window }
+        return .applied
+    }
+
+    /// Clear a window's status after Hauntty unsets it in tmux, before the
+    /// subscription reports it.
+    public func clearStatus(_ windowID: String) {
+        reported[windowID]?.status = nil
+        if let position = windows.firstIndex(where: { $0.id == windowID }) {
+            windows[position].status = nil
+        }
+    }
+
+    /// Apply a `%window-renamed` notification. tmux sends one for every
+    /// rename, so unlike the subscription it cannot miss a change back.
+    /// The `tmux` name a new pane has for a moment is left to the
+    /// subscription, which shows the process instead.
+    public func applyRename(windowID: String, name: String) {
+        guard name != "tmux" else { return }
+        reported[windowID]?.title = name
+        if let position = windows.firstIndex(where: { $0.id == windowID }), windows[position].title != name {
+            windows[position].title = name
+        }
+    }
+
     /// Mark a window active before tmux confirms it, so a click shows at once.
     public func setActive(_ id: String) {
         guard id != activeID, windows.contains(where: { $0.id == id }) else { return }
         activeID = id
+    }
+}
+
+private extension TmuxWindow {
+    /// The window with the subscription's fields, except the index, which
+    /// only a reload changes so the order stays consistent.
+    func applying(_ report: TabStore.Report?) -> TmuxWindow {
+        guard let report else { return self }
+        var window = self
+        window.status = report.status
+        window.command = report.command
+        window.title = report.title
+        return window
     }
 }

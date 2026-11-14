@@ -42,4 +42,42 @@ import Testing
         store.setActive("@9")
         #expect(store.activeID == "@1")
     }
+
+    @Test func subscriptionValuesWinOverReloads() {
+        let store = TabStore()
+        store.applyWindowList(["@0|0|1|1||zsh|zsh"])
+        #expect(store.applyReport(windowID: "@0", value: "0||zsh|zsh") == .applied)
+
+        // A reload sees a status the subscription never reported. tmux will
+        // not report the status going back to unset, so the reload must not
+        // win.
+        store.applyWindowList(["@0|0|1|1|done|zsh|zsh"])
+        #expect(store.windows[0].status == nil)
+
+        #expect(store.applyReport(windowID: "@0", value: "0|working|claude|my tab") == .applied)
+        #expect(store.windows[0].status == .working)
+        #expect(store.windows[0].command == "claude")
+        #expect(store.windows[0].title == "my tab")
+    }
+
+    @Test func subscriptionAsksForAReloadForNewAndMovedWindows() {
+        let store = TabStore()
+        store.applyWindowList(["@0|0|1|1||zsh|zsh"])
+        #expect(store.applyReport(windowID: "@1", value: "1||zsh|zsh") == .needsReload)
+        #expect(store.applyReport(windowID: "@0", value: "5||zsh|zsh") == .needsReload)
+        #expect(store.applyReport(windowID: "@0", value: "garbage") == .needsReload)
+    }
+
+    @Test func renamesApplyAtOnceExceptTheNameOfAStartingPane() {
+        let store = TabStore()
+        store.applyWindowList(["@0|0|1|1||zsh|2.1.325"])
+        #expect(store.applyReport(windowID: "@0", value: "0||2.1.325|2.1.325") == .applied)
+        store.applyRename(windowID: "@0", name: "zsh")
+        #expect(store.windows[0].title == "zsh")
+        // A reload does not undo it.
+        store.applyWindowList(["@0|0|1|1||zsh|2.1.325"])
+        #expect(store.windows[0].title == "zsh")
+        store.applyRename(windowID: "@0", name: "tmux")
+        #expect(store.windows[0].title == "zsh")
+    }
 }
