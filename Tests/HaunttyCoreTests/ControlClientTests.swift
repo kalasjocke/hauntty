@@ -10,7 +10,9 @@ private let tmuxPath = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/b
 @MainActor
 @Suite(.serialized, .enabled(if: tmuxPath != nil, "tmux is not installed"))
 struct ControlClientTests {
-    let socket = "hauntty-test-\(getpid())"
+    /// Each test gets its own server, so one test's server shutting down
+    /// cannot break the next test.
+    let socket = "hauntty-test-\(getpid())-\(UUID().uuidString.prefix(8))"
     /// tmux names a window after its process only once the pane prints
     /// something, so the tests run processes that print.
     let ping = "ping -i 0.2 127.0.0.1"
