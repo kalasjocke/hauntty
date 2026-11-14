@@ -1,3 +1,4 @@
+import HaunttyCore
 import SwiftUI
 
 /// The SF Symbol for a process. A placeholder set until there are real icons.
@@ -19,11 +20,15 @@ enum ProcessIcon {
 
 /// A filled tile with the focused pane's process icon, and up to two tiles
 /// stacked behind it to the right for the window's other panes. Each tile
-/// behind is slightly smaller and fainter than the one in front.
+/// behind is slightly smaller and fainter than the one in front. A dot on
+/// the front tile's top right corner shows the window's status.
 struct PaneStackIcon: View {
     let symbol: String
     let paneCount: Int
+    let status: WindowStatus?
     let color: Color
+    /// Opacity of the tiles and symbol. The status dot is not dimmed.
+    var tileOpacity: Double = 1
 
     private let width: CGFloat = 18
     private let height: CGFloat = 14
@@ -61,6 +66,13 @@ struct PaneStackIcon: View {
                     Image(systemName: symbol)
                         .font(.system(size: 7.5, weight: .bold))
                         .foregroundStyle(color)
+                        .opacity(tileOpacity)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if let status {
+                        StatusDot(status: status)
+                            .offset(x: 2.5, y: -2.5)
+                    }
                 }
         }
         .frame(width: width + step * CGFloat(others), height: height, alignment: .leading)
@@ -80,7 +92,7 @@ struct PaneStackIcon: View {
     /// itself, so only the edge to its right shows.
     private func shadowOfTile(_ front: Int, onto back: Int) -> some View {
         RoundedRectangle(cornerRadius: tileRadius(front))
-            .fill(.black.opacity(shadowOpacity))
+            .fill(.black.opacity(shadowOpacity * tileOpacity))
             .frame(width: tileWidth(front), height: tileHeight(front))
             .offset(x: tileX(front) - tileX(back) + shadowOffset)
             .blur(radius: shadowBlur)
@@ -92,7 +104,43 @@ struct PaneStackIcon: View {
         let shape = RoundedRectangle(cornerRadius: radius)
         return ZStack {
             shape.fill(.black).blendMode(.destinationOut)
-            shape.fill(color.opacity(fill))
+            shape.fill(color.opacity(fill * tileOpacity))
+        }
+    }
+}
+
+/// A small dot for each status: white fading in and out while working, yellow
+/// when blocked, green when done, red on error and blue when idle. A ring
+/// around it is cut out of the tiles.
+private struct StatusDot: View {
+    let status: WindowStatus
+
+    private let size: CGFloat = 6
+    private let ring: CGFloat = 1.5
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.black)
+                .frame(width: size + 2 * ring, height: size + 2 * ring)
+                .blendMode(.destinationOut)
+            switch status {
+            case .working:
+                Circle()
+                    .fill(.white)
+                    .frame(width: size, height: size)
+                    .phaseAnimator([false, true]) { dot, bright in
+                        dot.opacity(bright ? 1 : 0.3)
+                    } animation: { _ in .easeInOut(duration: 0.7) }
+            case .blocked:
+                Circle().fill(.yellow).frame(width: size, height: size)
+            case .done:
+                Circle().fill(.green).frame(width: size, height: size)
+            case .error:
+                Circle().fill(.red).frame(width: size, height: size)
+            case .idle:
+                Circle().fill(.blue).frame(width: size, height: size)
+            }
         }
     }
 }
