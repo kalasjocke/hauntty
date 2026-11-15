@@ -1,9 +1,8 @@
 import Observation
 
-/// What a program in a window reports through the `@hauntty-status` window
-/// option, for example from a Claude Code hook:
-/// `tmux set -w @hauntty-status working`. The states are the ones in the
-/// OSC 7501 program status proposal:
+/// What a program in a window reports through the `@state` window option,
+/// for example from a Claude Code hook: `tmux set -w @state working`. The
+/// states are the ones in the OSC 7501 program status proposal:
 /// https://mitchellh.com/writing/program-status-osc7501
 public enum WindowStatus: String, Sendable {
     /// At rest, waiting for the user's next instruction.
@@ -80,7 +79,7 @@ public final class TabStore {
 
     /// What the tmux subscription reports for each window, read by
     /// `applyReport`. The title is last so it may contain the separator.
-    public static let reportFormat = "#{window_index}|#{@hauntty-status}|" + titleFormat
+    public static let reportFormat = "#{window_index}|#{@state}|" + titleFormat
 
     /// What the tmux subscription reports for each pane, read by
     /// `applyPaneReport`.
@@ -101,7 +100,7 @@ public final class TabStore {
     /// is last so it may contain the separator. Process names and pane ids
     /// do not.
     public static let windowListFormat =
-        "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{@hauntty-status}|"
+        "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{@state}|"
         + "#{pane_id}|#{P:#{pane_id} }|#{pane_current_command}|" + titleFormat
 
     public init() {}
