@@ -42,8 +42,8 @@ struct TabBarView: View {
         // from. Taps on a tab still select it.
         .gesture(WindowDragGesture())
         .allowsWindowActivationEvents(true)
-        .animation(.smooth(duration: 0.25), value: store.windows)
-        .animation(.smooth(duration: 0.25), value: store.activeID)
+        .animation(.smooth(duration: 0.2), value: store.windows)
+        .animation(.smooth(duration: 0.2), value: store.activeID)
     }
 }
 
