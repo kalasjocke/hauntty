@@ -3,12 +3,23 @@ import SwiftUI
 
 /// The SF Symbol for a process. A placeholder set until there are real icons.
 enum ProcessIcon {
-    /// Not an SF Symbol: the icon draws the Claude mark for it.
+    /// Not SF Symbols: the icon draws the program's mark for these.
     static let claude = "hauntty.claude"
+    static let neovim = "hauntty.neovim"
+
+    /// The mark to draw instead of an SF Symbol, if any.
+    static func mark(for symbol: String) -> NSImage? {
+        switch symbol {
+        case claude: return ClaudeMark.image
+        case neovim: return NeovimMark.image
+        default: return nil
+        }
+    }
 
     static func symbol(for command: String) -> String {
         switch command {
-        case "nvim", "vim", "vi", "hx", "nano": return "pencil"
+        case "nvim": return neovim
+        case "vim", "vi", "hx", "nano": return "pencil"
         // A new pane runs as a copy of tmux until its shell starts.
         case "zsh", "bash", "fish", "sh", "tmux": return "chevron.right"
         case "claude": return claude
@@ -68,8 +79,8 @@ struct PaneStackIcon: View {
                 .frame(width: width, height: height)
                 .overlay {
                     Group {
-                        if symbol == ProcessIcon.claude {
-                            Image(nsImage: ClaudeMark.image)
+                        if let mark = ProcessIcon.mark(for: symbol) {
+                            Image(nsImage: mark)
                                 .resizable()
                                 .frame(width: 9, height: 9)
                                 .foregroundStyle(color)
