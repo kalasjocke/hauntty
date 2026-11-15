@@ -32,11 +32,16 @@ public final class ControlClient {
     private static let minimumRetryDelay: TimeInterval = 0.1
     private static let maximumRetryDelay: TimeInterval = 2
 
-    /// Subscription that reports each window's index, status, focused process
-    /// and title, which the store applies directly. tmux checks it at most
-    /// once a second.
+    /// Subscription that reports each window's index, status and title,
+    /// which the store applies directly. tmux checks it at most once a
+    /// second.
     static let subscription = "\(subscriptionName):@*:" + TabStore.reportFormat
     static let subscriptionName = "hauntty-tabs"
+
+    /// Subscription that reports the process in each pane, also checked at
+    /// most once a second.
+    static let paneSubscription = "\(paneSubscriptionName):%*:" + TabStore.paneReportFormat
+    static let paneSubscriptionName = "hauntty-panes"
 
     /// - Parameters:
     ///   - executable: Path to tmux, or a bare name to look up in PATH.
@@ -169,6 +174,7 @@ public final class ControlClient {
             attached = true
             retryDelay = Self.minimumRetryDelay
             send("refresh-client -B \(Self.quoted(Self.subscription))")
+            send("refresh-client -B \(Self.quoted(Self.paneSubscription))")
             reload()
         }
 
@@ -185,16 +191,20 @@ public final class ControlClient {
                 guard id == sessionID else { return }
                 store.setActive(windowID)
                 reload()
-            case .subscriptionChanged(Self.subscriptionName, let windowID?, let value):
+            case .subscriptionChanged(Self.subscriptionName, let windowID?, _, let value):
                 switch store.applyReport(windowID: windowID, value: value) {
                 case .applied: clearDoneInActiveWindow()
                 case .needsReload: reload()
                 }
+            case .subscriptionChanged(Self.paneSubscriptionName, _, let paneID?, let value):
+                store.applyPaneReport(paneID: paneID, value: value)
             case .windowRenamed(let windowID, let name):
                 store.applyRename(windowID: windowID, name: name)
                 reload()
-            case .windowAdd, .windowClose, .windowPaneChanged, .layoutChange,
-                 .subscriptionChanged:
+            case .windowPaneChanged(let windowID, let paneID):
+                store.applyActivePane(windowID: windowID, paneID: paneID)
+                reload()
+            case .windowAdd, .windowClose, .layoutChange, .subscriptionChanged:
                 reload()
             case .exit, .other:
                 break

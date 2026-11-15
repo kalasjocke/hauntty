@@ -72,7 +72,7 @@ import Testing
     @Test func subscriptionValuesWinOverReloads() {
         let store = TabStore()
         store.applyWindowList(["@0|0|1|1||%0|%0 |zsh|zsh"])
-        #expect(store.applyReport(windowID: "@0", value: "0||zsh|zsh") == .applied)
+        #expect(store.applyReport(windowID: "@0", value: "0||zsh") == .applied)
 
         // A reload sees a status the subscription never reported. tmux will
         // not report the status going back to unset, so the reload must not
@@ -80,17 +80,39 @@ import Testing
         store.applyWindowList(["@0|0|1|1|done|%0|%0 |zsh|zsh"])
         #expect(store.windows[0].status == nil)
 
-        #expect(store.applyReport(windowID: "@0", value: "0|working|claude|my tab") == .applied)
+        #expect(store.applyReport(windowID: "@0", value: "0|working|my|tab") == .applied)
         #expect(store.windows[0].status == .working)
-        #expect(store.windows[0].command == "claude")
-        #expect(store.windows[0].title == "my tab")
+        #expect(store.windows[0].title == "my|tab")
+    }
+
+    @Test func showsTheFocusedPanesProcessAsSoonAsTheFocusMoves() {
+        let store = TabStore()
+        store.applyWindowList(["@0|0|1|2||%0|%0 %1 |zsh|zsh"])
+        store.applyPaneReport(paneID: "%0", value: "zsh")
+        store.applyPaneReport(paneID: "%1", value: "nvim")
+        #expect(store.windows[0].command == "zsh")
+
+        store.applyActivePane(windowID: "@0", paneID: "%1")
+        #expect(store.windows[0].activePaneID == "%1")
+        #expect(store.windows[0].command == "nvim")
+
+        // A reload that catches a process the subscription never reported
+        // does not win, since tmux would not report it going away.
+        store.applyWindowList(["@0|0|1|2||%1|%0 %1 |git|nvim"])
+        #expect(store.windows[0].command == "nvim")
+
+        // A new pane shows the reload's process until it is reported.
+        store.applyWindowList(["@0|0|1|3||%2|%0 %1 %2 |zsh|zsh"])
+        #expect(store.windows[0].command == "zsh")
+        store.applyPaneReport(paneID: "%2", value: "top")
+        #expect(store.windows[0].command == "top")
     }
 
     @Test func subscriptionAsksForAReloadForNewAndMovedWindows() {
         let store = TabStore()
         store.applyWindowList(["@0|0|1|1||%0|%0 |zsh|zsh"])
-        #expect(store.applyReport(windowID: "@1", value: "1||zsh|zsh") == .needsReload)
-        #expect(store.applyReport(windowID: "@0", value: "5||zsh|zsh") == .needsReload)
+        #expect(store.applyReport(windowID: "@1", value: "1||zsh") == .needsReload)
+        #expect(store.applyReport(windowID: "@0", value: "5||zsh") == .needsReload)
         #expect(store.applyReport(windowID: "@0", value: "garbage") == .needsReload)
     }
 
@@ -107,7 +129,7 @@ import Testing
     @Test func renamesApplyAtOnceExceptTheNameOfAStartingPane() {
         let store = TabStore()
         store.applyWindowList(["@0|0|1|1||%0|%0 |zsh|2.1.325"])
-        #expect(store.applyReport(windowID: "@0", value: "0||2.1.325|2.1.325") == .applied)
+        #expect(store.applyReport(windowID: "@0", value: "0||2.1.325") == .applied)
         store.applyRename(windowID: "@0", name: "zsh")
         #expect(store.windows[0].title == "zsh")
         // A reload does not undo it.

@@ -33,8 +33,9 @@ struct ControlClientTests {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines)
     }
 
-    func waitUntil(_ condition: () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(5)
+    func waitUntil(within timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(Double(timeout.components.seconds)
+            + Double(timeout.components.attoseconds) / 1e18)
         while !condition() {
             if Date() > deadline { return false }
             try? await Task.sleep(for: .milliseconds(20))
@@ -83,6 +84,15 @@ struct ControlClientTests {
         #expect(store.windows.first?.activePaneID == (try tmux("display-message", "-p", "-t", first, "#{pane_id}")))
         try tmux("select-pane", "-t", "\(first).0")
         #expect(await waitUntil { store.windows.first?.title == "top" })
+
+        // The focused pane's process follows a pane switch without waiting
+        // for the subscription, which tmux checks once a second.
+        #expect(await waitUntil { store.windows.first?.command == "top" })
+        try await Task.sleep(for: .milliseconds(1100))
+        for (pane, name) in [("1", "ping"), ("0", "top")] {
+            try tmux("select-pane", "-t", "\(first).\(pane)")
+            #expect(await waitUntil(within: .milliseconds(150)) { store.windows.first?.command == name })
+        }
 
         // A program sets the window's status through a window option.
         try tmux("set-option", "-w", "-t", first, "@hauntty-status", "blocked")
