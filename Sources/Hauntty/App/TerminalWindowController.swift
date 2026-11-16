@@ -6,7 +6,7 @@ import SwiftUI
 /// The titlebar and its buttons are hidden, like Ghostty's
 /// `macos-titlebar-style = hidden`.
 final class TerminalWindowController: NSWindowController, NSWindowDelegate {
-    static let tabBarHeight: CGFloat = 41
+    static let tabBarHeight: CGFloat = 36
 
     private let surfaceView: SurfaceView
 
