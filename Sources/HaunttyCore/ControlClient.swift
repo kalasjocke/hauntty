@@ -44,8 +44,8 @@ public final class ControlClient {
     static let subscription = "\(subscriptionName):@*:" + TabStore.reportFormat
     static let subscriptionName = "hauntty-tabs"
 
-    /// Subscription that reports the process in each pane, also checked at
-    /// most once a second.
+    /// Subscription that reports the process and title of each pane, also
+    /// checked at most once a second.
     static let paneSubscription = "\(paneSubscriptionName):%*:" + TabStore.paneReportFormat
     static let paneSubscriptionName = "hauntty-panes"
 
@@ -301,7 +301,7 @@ public final class ControlClient {
     /// the program then, so the icon changes with the title. Only automatic
     /// renames follow the program, so a rename by the user is ignored.
     private func readActiveCommand(in windowID: String) {
-        let format = "#{automatic-rename}|#{pane_id}|#{pane_current_command}"
+        let format = "#{automatic-rename}|#{pane_id}|" + TabStore.paneReportFormat
         send("display-message -p -t \(windowID) \(Self.quoted(format))") { [weak self] reply in
             guard let self, !reply.isError, let line = reply.lines.first else { return }
             let fields = line.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
