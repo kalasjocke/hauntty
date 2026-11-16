@@ -16,6 +16,7 @@ struct TabBarView: View {
             ForEach(store.windows) { window in
                 TabButton(
                     title: window.title,
+                    command: window.command,
                     paneCount: window.paneCount,
                     // Idle only matters for tabs in the background.
                     status: window.status == .idle && window.id == store.activeID ? nil : window.status,
@@ -47,6 +48,7 @@ struct TabBarView: View {
 
 private struct TabButton: View {
     let title: String
+    let command: String
     let paneCount: Int
     let status: WindowStatus?
     let isActive: Bool
@@ -62,7 +64,7 @@ private struct TabButton: View {
         MaxWidth(225) {
             HStack(spacing: iconGap) {
                 PaneStackIcon(
-                    symbol: ProcessIcon.symbol(for: title),
+                    symbol: ProcessIcon.symbol(for: command),
                     paneCount: paneCount,
                     status: status,
                     color: foreground,

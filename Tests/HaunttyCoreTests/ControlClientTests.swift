@@ -11,6 +11,9 @@ private let tmuxPath = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/b
 @Suite(.serialized, .enabled(if: tmuxPath != nil, "tmux is not installed"))
 struct ControlClientTests {
     let socket = "hauntty-test-\(getpid())"
+    /// tmux names a window after its process only once the pane prints
+    /// something, so the tests run processes that print.
+    let ping = "ping -i 0.2 127.0.0.1"
 
     @discardableResult
     func tmux(_ arguments: String...) throws -> String {
@@ -38,7 +41,7 @@ struct ControlClientTests {
     }
 
     @Test func followsTheSession() async throws {
-        try tmux("new-session", "-d", "-s", "hauntty", "-x", "100", "-y", "30", "sleep 600")
+        try tmux("new-session", "-d", "-s", "hauntty", "-x", "100", "-y", "30", "top")
         defer { _ = try? tmux("kill-server") }
 
         let store = TabStore()
@@ -46,13 +49,13 @@ struct ControlClientTests {
         client.start()
         defer { client.stop() }
 
-        #expect(await waitUntil { store.windows.map(\.title) == ["sleep"] })
+        #expect(await waitUntil { store.windows.map(\.title) == ["top"] })
         let first = try #require(store.windows.first?.id)
         #expect(store.activeID == first)
 
         // A new window becomes a tab, named after its process.
-        try tmux("new-window", "-d", "-t", "hauntty:", "top")
-        #expect(await waitUntil { store.windows.map(\.title) == ["sleep", "top"] })
+        try tmux("new-window", "-d", "-t", "hauntty:", ping)
+        #expect(await waitUntil { store.windows.map(\.title) == ["top", "ping"] })
         let second = store.windows[1].id
 
         // Clicking a tab selects the window in tmux.
@@ -68,13 +71,13 @@ struct ControlClientTests {
 
         // The title follows the focused split, and the pane count follows
         // splits.
-        try tmux("split-window", "-t", first, "cat")
-        #expect(await waitUntil { store.windows.first?.title == "cat" })
+        try tmux("split-window", "-t", first, ping)
+        #expect(await waitUntil { store.windows.first?.title == "ping" })
         #expect(store.windows.first?.paneCount == 2)
         try tmux("split-window", "-d", "-t", first, "cat")
         #expect(await waitUntil { store.windows.first?.paneCount == 3 })
         try tmux("select-pane", "-t", "\(first).0")
-        #expect(await waitUntil { store.windows.first?.title == "sleep" })
+        #expect(await waitUntil { store.windows.first?.title == "top" })
 
         // A program sets the window's status through a window option.
         try tmux("set-option", "-w", "-t", first, "@hauntty-status", "blocked")
@@ -103,6 +106,23 @@ struct ControlClientTests {
         #expect(store.windows.first?.status == nil)
         #expect(try tmux("show-options", "-w", "-v", "-t", first, "@hauntty-status").isEmpty)
 
+        // A window the user renamed shows its name. Turning automatic-rename
+        // back on lets tmux name it after the process again.
+        try tmux("rename-window", "-t", first, "api server")
+        #expect(await waitUntil { store.windows.first?.title == "api server" })
+        #expect(store.windows.first?.command == "top")
+        try tmux("set-option", "-w", "-t", first, "automatic-rename", "on")
+        #expect(await waitUntil { store.windows.first?.title == "top" })
+
+        // A window tmux named "tmux" by itself shows its process, but a
+        // window the user named "tmux" keeps the name.
+        try tmux("rename-window", "-t", first, "tmux")
+        try tmux("set-option", "-w", "-t", first, "automatic-rename", "on")
+        try tmux("rename-window", "-t", second, "tmux")
+        #expect(await waitUntil { store.windows.map(\.title) == ["top", "tmux"] })
+        try tmux("set-option", "-w", "-t", second, "automatic-rename", "on")
+        #expect(await waitUntil { store.windows.map(\.title) == ["top", "ping"] })
+
         // Moving a window reorders the tabs.
         try tmux("move-window", "-s", second, "-t", "hauntty:7")
         try tmux("move-window", "-s", first, "-t", "hauntty:9")
@@ -125,8 +145,8 @@ struct ControlClientTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(store.windows.isEmpty)
 
-        try tmux("new-session", "-d", "-s", "hauntty", "sleep 600")
-        #expect(await waitUntil { store.windows.map(\.title) == ["sleep"] })
+        try tmux("new-session", "-d", "-s", "hauntty", "top")
+        #expect(await waitUntil { store.windows.map(\.title) == ["top"] })
     }
 
     @Test func doesNotAttachToASessionThatOnlyStartsWithTheName() async throws {

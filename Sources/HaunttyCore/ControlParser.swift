@@ -24,6 +24,7 @@ public enum ControlNotification: Equatable, Sendable {
     case sessionWindowChanged(sessionID: String, windowID: String)
     case windowAdd(windowID: String)
     case windowClose(windowID: String)
+    case windowRenamed(windowID: String, name: String)
     case windowPaneChanged(windowID: String, paneID: String)
     /// A window's panes were split, closed or resized.
     case layoutChange(windowID: String)
@@ -120,6 +121,9 @@ public struct ControlParser {
             return .windowAdd(windowID: words[0])
         case "window-close" where words.count >= 1:
             return .windowClose(windowID: words[0])
+        case "window-renamed" where words.count >= 1:
+            // The name may contain spaces.
+            return .windowRenamed(windowID: words[0], name: words.dropFirst().joined(separator: " "))
         case "window-pane-changed" where words.count >= 2:
             return .windowPaneChanged(windowID: words[0], paneID: words[1])
         case "layout-change" where words.count >= 1:
