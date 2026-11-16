@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var claudeSessions: ClaudeSessionFile?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Holding a key repeats it, as Ghostty does, instead of showing the
+        // macOS accent picker.
+        UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
+
         NSApp.mainMenu = makeMainMenu()
         ghostty = GhosttyApp()
 
