@@ -32,10 +32,10 @@ struct TabBarView: View {
         .background(Capsule().fill(foreground.opacity(0.08)))
         .padding(.horizontal, 12)
         // The terminal adds its own top padding below the bar (2 points with
-        // `window-padding-y = 2,0`), so 1 point here leaves the same 3 point
-        // gap below the bar as above it.
-        .padding(.top, 3)
-        .padding(.bottom, 1)
+        // `window-padding-y = 2,0`), so 3 points here leave a 5 point gap
+        // below the bar.
+        .padding(.top, 5)
+        .padding(.bottom, 3)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         // The titlebar is hidden, so the tab bar is where the window is moved
@@ -70,14 +70,13 @@ private struct TabButton: View {
                     status: status,
                     color: foreground,
                     tileOpacity: isActive ? 1 : 0.6)
-                // Size for the bold title, so the tab keeps its width when it
-                // becomes active.
-                title(weight: .semibold)
-                    .hidden()
-                    .overlay(alignment: .leading) {
-                        title(weight: isActive ? .semibold : .regular)
-                            .opacity(isActive ? 1 : 0.6)
-                    }
+                // Every title has the same weight, so tabs keep their width and
+                // the active one only gets brighter.
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .opacity(isActive ? 1 : 0.6)
             }
             .padding(.horizontal, 3 * iconGap)
         }
@@ -98,13 +97,6 @@ private struct TabButton: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { onSelect() }
-    }
-
-    private func title(weight: Font.Weight) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: weight))
-            .lineLimit(1)
-            .truncationMode(.middle)
     }
 }
 
