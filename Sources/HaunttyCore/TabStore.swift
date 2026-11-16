@@ -191,23 +191,29 @@ public final class TabStore {
         }
     }
 
-    /// Whether the window's focused pane runs Claude Code, from its process
-    /// name or the window name tmux gave it.
+    /// Whether a pane in the window runs Claude Code, from its process name
+    /// or the window name tmux gave it.
     public func runsClaude(_ window: TmuxWindow) -> Bool {
-        Self.isClaudeProcess(window.command) || Self.isClaudeProcess(window.title)
+        claudeTitle(in: window) != nil || Self.isClaudeProcess(window.title)
     }
 
-    /// The tab title: the window's title from tmux. When the focused pane
-    /// runs Claude Code, its pane title instead, which Claude Code sets to
-    /// the name of the session it shows.
+    /// The tab title: the window's title from tmux. When a pane in the
+    /// window runs Claude Code, its pane title instead, which Claude Code
+    /// sets to the name of the session it shows.
     public func tabTitle(for window: TmuxWindow) -> String {
-        if Self.isClaudeProcess(window.command) {
-            let title = Self.droppingMark(window.paneTitle)
-            if let agents = Self.agentsTitle(title) { return agents }
-            if !title.isEmpty { return title }
-        }
+        if let title = claudeTitle(in: window) { return title }
         // tmux names a window running Claude Code after its version.
         return Self.isClaudeProcess(window.title) ? "Claude" : window.title
+    }
+
+    /// The title of the pane in the window that runs Claude Code, the
+    /// focused pane first, or nil if none does.
+    private func claudeTitle(in window: TmuxWindow) -> String? {
+        let focused = PaneReport(command: window.command, title: window.paneTitle)
+        let others = window.paneIDs.lazy.filter { $0 != window.activePaneID }.compactMap { self.panes[$0] }
+        guard let pane = ([focused] + others).first(where: { Self.isClaudeProcess($0.command) }) else { return nil }
+        let title = Self.droppingMark(pane.title)
+        return Self.agentsTitle(title) ?? (title.isEmpty ? "Claude" : title)
     }
 
     /// Claude Code's agents view titles its pane `claude agents`, or

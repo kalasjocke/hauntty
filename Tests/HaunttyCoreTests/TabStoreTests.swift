@@ -50,27 +50,33 @@ import Testing
         #expect(store.activeID == "@1")
     }
 
-    @Test func titlesClaudeTabsAfterTheFocusedPanesTitle() {
+    @Test func titlesClaudeTabsAfterTheClaudePanesTitle() {
         let store = TabStore()
         store.applyWindowList([
             "@0|0|1|2||%1|%0 %1 |zsh|zsh",
             "@1|1|0|2||%2|%2 %3 |2.1.325|2.1.325",
+            "@2|2|0|1||%4|%4 |zsh|zsh",
         ])
         store.applyPaneReport(paneID: "%0", value: "2.1.325|slack-mentions")
         store.applyPaneReport(paneID: "%1", value: "zsh|~/src")
         store.applyPaneReport(paneID: "%2", value: "2.1.325|✳ Project rename to tty")
         store.applyPaneReport(paneID: "%3", value: "2.1.325|other")
-        // Like tmux, the tab follows the focused pane, not a split.
-        #expect(store.tabTitle(for: store.windows[0]) == "zsh")
-        #expect(!store.runsClaude(store.windows[0]))
+        store.applyPaneReport(paneID: "%4", value: "zsh|~")
+        // Claude Code in an unfocused split still names the tab.
+        #expect(store.tabTitle(for: store.windows[0]) == "slack-mentions")
+        #expect(store.runsClaude(store.windows[0]))
+        // The focused pane wins over another Claude Code pane.
         #expect(store.tabTitle(for: store.windows[1]) == "Project rename to tty")
+        #expect(store.tabTitle(for: store.windows[2]) == "zsh")
+        #expect(!store.runsClaude(store.windows[2]))
 
         // Switching sessions inside Claude Code changes the pane title.
         store.applyPaneReport(paneID: "%2", value: "2.1.325|verify|pill")
         #expect(store.tabTitle(for: store.windows[1]) == "verify|pill")
 
-        store.applyActivePane(windowID: "@0", paneID: "%0")
-        #expect(store.tabTitle(for: store.windows[0]) == "slack-mentions")
+        // When Claude Code exits, the tab follows the focused pane again.
+        store.applyPaneReport(paneID: "%0", value: "zsh|~/src")
+        #expect(store.tabTitle(for: store.windows[0]) == "zsh")
     }
 
     @Test func titlesClaudesAgentsViewWithTheSessionsAwaitingInput() {
