@@ -45,9 +45,7 @@ private let expected: [ControlEvent] = [
     .notification(.windowAdd(windowID: "@1")),
     .notification(.other(name: "window-renamed", arguments: "@1 tmux")),
     .notification(.sessionWindowChanged(sessionID: "$0", windowID: "@1")),
-    .notification(.other(
-        name: "layout-change",
-        arguments: "@1 468d,100x30,0,0[100x15,0,0,1,100x14,0,16,2] 468d,100x30,0,0[100x15,0,0,1,100x14,0,16,2] *")),
+    .notification(.layoutChange(windowID: "@1")),
     .notification(.subscriptionChanged(name: "tabs", windowID: "@0", value: "0 zsh")),
     .notification(.subscriptionChanged(name: "tabs", windowID: "@1", value: "1 zsh")),
     .notification(.other(name: "window-renamed", arguments: "@1 zsh")),

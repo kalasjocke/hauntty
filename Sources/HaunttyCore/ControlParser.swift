@@ -25,6 +25,8 @@ public enum ControlNotification: Equatable, Sendable {
     case windowAdd(windowID: String)
     case windowClose(windowID: String)
     case windowPaneChanged(windowID: String, paneID: String)
+    /// A window's panes were split, closed or resized.
+    case layoutChange(windowID: String)
     /// `windowID` is nil for subscriptions that are not per window.
     case subscriptionChanged(name: String, windowID: String?, value: String)
     case exit(reason: String?)
@@ -120,6 +122,8 @@ public struct ControlParser {
             return .windowClose(windowID: words[0])
         case "window-pane-changed" where words.count >= 2:
             return .windowPaneChanged(windowID: words[0], paneID: words[1])
+        case "layout-change" where words.count >= 1:
+            return .layoutChange(windowID: words[0])
         case "subscription-changed":
             // name session window index pane ... : value
             guard let separator = arguments.range(of: " : ") else { break }
