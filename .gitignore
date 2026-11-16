@@ -1,0 +1,5 @@
+.build/
+build/
+vendor/GhosttyKit.xcframework/
+vendor/resources/
+.DS_Store
