@@ -1,0 +1,15 @@
+import AppKit
+
+/// The Neovim mark, from Simple Icons (https://simpleicons.org). The logo is
+/// by Jason Long and licensed CC BY-SA 3.0.
+enum NeovimMark {
+    /// A template image, drawn in the tab's text color.
+    static let image: NSImage = {
+        let svg = """
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.214 4.954v13.615L7.655 24V10.314L3.312 3.845 2.214 4.954zm4.999 17.98l-4.557-4.548V5.136l.59-.596 3.967 5.908v12.485zm14.573-4.457l-.862.937-4.24-6.376V0l5.068 5.092.034 13.385zM7.431.001l12.998 19.835-3.637 3.637L3.787 3.683 7.43 0z"/></svg>
+            """
+        let image = NSImage(data: Data(svg.utf8)) ?? NSImage()
+        image.isTemplate = true
+        return image
+    }()
+}
