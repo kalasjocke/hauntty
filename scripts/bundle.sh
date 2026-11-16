@@ -19,6 +19,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Hauntty" "$app/Contents/MacOS/Hauntty"
 cp "$root/Resources/Info.plist" "$app/Contents/Info.plist"
+cp "$root/Resources/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 # libghostty finds its themes by looking for terminfo next to the executable.
 cp -R "$root/vendor/resources/ghostty" "$app/Contents/Resources/ghostty"
 cp -R "$root/vendor/resources/terminfo" "$app/Contents/Resources/terminfo"
