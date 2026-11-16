@@ -87,14 +87,15 @@ public final class TabStore {
     public static let paneReportFormat = "#{pane_current_command}"
 
     /// The tab title: the window name, as tmux's own status bar shows it.
-    /// tmux keeps it set to the focused process while `automatic-rename` is
-    /// on, following `automatic-rename-format`.
     ///
-    /// One exception: a new pane runs as a copy of tmux until it starts the
-    /// shell, and tmux keeps the automatic name `tmux` until the shell prints
-    /// something. Show the process instead of that name.
+    /// While `automatic-rename` is on, it is the name tmux would give the
+    /// window now, from `automatic-rename-format` and the focused pane.
+    /// tmux itself renames the window later: at most once every 500 ms, and
+    /// only after the pane prints something. Without this, a new pane's
+    /// window keeps the name `tmux` for a while, and a pane switch that
+    /// follows output in the old pane renames the window half a second late.
     public static let titleFormat =
-        "#{?#{&&:#{automatic-rename},#{==:#{window_name},tmux}},#{pane_current_command},#{window_name}}"
+        "#{?automatic-rename,#{E:automatic-rename-format},#{window_name}}"
 
     /// The `list-windows -F` format that `applyWindowList` reads. The title
     /// is last so it may contain the separator. Process names and pane ids
@@ -218,6 +219,13 @@ public final class TabStore {
         if let position = windows.firstIndex(where: { $0.id == windowID }), windows[position].title != name {
             windows[position].title = name
         }
+    }
+
+    /// Apply the title of a window whose focus moved to `paneID`, read with
+    /// `titleFormat` for that pane. Ignored if the focus has moved again.
+    public func applyTitle(windowID: String, paneID: String, title: String) {
+        guard windows.contains(where: { $0.id == windowID && $0.activePaneID == paneID }) else { return }
+        applyRename(windowID: windowID, name: title)
     }
 
     /// Mark a window active before tmux confirms it, so a click shows at once.

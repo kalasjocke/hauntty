@@ -203,6 +203,12 @@ public final class ControlClient {
                 reload()
             case .windowPaneChanged(let windowID, let paneID):
                 store.applyActivePane(windowID: windowID, paneID: paneID)
+                // The window subscription would report the new title within
+                // a second. Ask for it now.
+                send("display-message -p -t \(paneID) \(Self.quoted(TabStore.titleFormat))") { [weak self] reply in
+                    guard let self, !reply.isError, let title = reply.lines.first else { return }
+                    store.applyTitle(windowID: windowID, paneID: paneID, title: title)
+                }
                 reload()
             case .windowAdd, .windowClose, .layoutChange, .subscriptionChanged:
                 reload()

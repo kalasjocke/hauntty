@@ -85,13 +85,17 @@ struct ControlClientTests {
         try tmux("select-pane", "-t", "\(first).0")
         #expect(await waitUntil { store.windows.first?.title == "top" })
 
-        // The focused pane's process follows a pane switch without waiting
-        // for the subscription, which tmux checks once a second.
+        // The focused pane's process and name follow a pane switch at once.
+        // They do not wait for the subscription, which tmux checks once a
+        // second, or for tmux to rename the window, which it does at most
+        // once every 500 ms and the printing panes keep it busy with.
         #expect(await waitUntil { store.windows.first?.command == "top" })
         try await Task.sleep(for: .milliseconds(1100))
-        for (pane, name) in [("1", "ping"), ("0", "top")] {
+        for (pane, name) in [("1", "ping"), ("0", "top"), ("1", "ping"), ("0", "top")] {
             try tmux("select-pane", "-t", "\(first).\(pane)")
-            #expect(await waitUntil(within: .milliseconds(150)) { store.windows.first?.command == name })
+            #expect(await waitUntil(within: .milliseconds(150)) {
+                store.windows.first?.command == name && store.windows.first?.title == name
+            })
         }
 
         // A program sets the window's status through a window option.
