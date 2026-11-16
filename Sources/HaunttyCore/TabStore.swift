@@ -29,10 +29,14 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
     public var command: String
     public var paneCount: Int
     public var status: WindowStatus?
+    /// The focused pane's id, like `%12`.
+    public var activePaneID: String
+    /// All pane ids, in tmux's order.
+    public var paneIDs: [String]
 
     public init(
         id: String, index: Int, title: String, command: String? = nil, paneCount: Int = 1,
-        status: WindowStatus? = nil
+        status: WindowStatus? = nil, activePaneID: String = "", paneIDs: [String] = []
     ) {
         self.id = id
         self.index = index
@@ -40,6 +44,8 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
         self.command = command ?? title
         self.paneCount = paneCount
         self.status = status
+        self.activePaneID = activePaneID
+        self.paneIDs = paneIDs
     }
 }
 
@@ -49,6 +55,8 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
 public final class TabStore {
     public private(set) var windows: [TmuxWindow] = []
     public private(set) var activeID: String?
+    /// Running Claude Code sessions, by tmux pane id.
+    public private(set) var claudeSessions: [String: ClaudeSession] = [:]
 
     /// The fields the tmux subscription last reported, by window id.
     ///
@@ -81,10 +89,11 @@ public final class TabStore {
         "#{?#{&&:#{automatic-rename},#{==:#{window_name},tmux}},#{pane_current_command},#{window_name}}"
 
     /// The `list-windows -F` format that `applyWindowList` reads. The title
-    /// is last so it may contain the separator. Process names do not.
+    /// is last so it may contain the separator. Process names and pane ids
+    /// do not.
     public static let windowListFormat =
         "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{@hauntty-status}|"
-        + "#{pane_current_command}|" + titleFormat
+        + "#{pane_id}|#{P:#{pane_id} }|#{pane_current_command}|" + titleFormat
 
     public init() {}
 
@@ -93,14 +102,16 @@ public final class TabStore {
         var parsed: [TmuxWindow] = []
         var active: String?
         for line in lines {
-            let fields = line.split(separator: "|", maxSplits: 6, omittingEmptySubsequences: false)
-            guard fields.count == 7, fields[0].hasPrefix("@"),
+            let fields = line.split(separator: "|", maxSplits: 8, omittingEmptySubsequences: false)
+            guard fields.count == 9, fields[0].hasPrefix("@"),
                   let index = Int(fields[1]), let paneCount = Int(fields[3])
             else { continue }
             let window = TmuxWindow(
-                id: String(fields[0]), index: index, title: String(fields[6]),
-                command: String(fields[5]), paneCount: paneCount,
-                status: WindowStatus(rawValue: String(fields[4])))
+                id: String(fields[0]), index: index, title: String(fields[8]),
+                command: String(fields[7]), paneCount: paneCount,
+                status: WindowStatus(rawValue: String(fields[4])),
+                activePaneID: String(fields[5]),
+                paneIDs: fields[6].split(separator: " ").map(String.init))
             parsed.append(window.applying(reported[window.id]))
             if fields[2] == "1" { active = window.id }
         }
@@ -142,6 +153,32 @@ public final class TabStore {
         if let position = windows.firstIndex(where: { $0.id == windowID }) {
             windows[position].status = nil
         }
+    }
+
+    /// Replace the running Claude Code sessions.
+    public func applyClaudeSessions(_ sessions: [String: ClaudeSession]) {
+        if sessions != claudeSessions { claudeSessions = sessions }
+    }
+
+    /// The Claude Code session running in a window, preferring the focused
+    /// pane when there is more than one.
+    public func claudeSession(in window: TmuxWindow) -> ClaudeSession? {
+        claudeSessions[window.activePaneID] ?? window.paneIDs.lazy.compactMap { self.claudeSessions[$0] }.first
+    }
+
+    /// Whether the window runs Claude Code, from its session file or its
+    /// process name.
+    public func runsClaude(_ window: TmuxWindow) -> Bool {
+        claudeSession(in: window) != nil || ClaudeSession.isClaudeProcess(window.command)
+            || ClaudeSession.isClaudeProcess(window.title)
+    }
+
+    /// The tab title: the Claude Code session's title if one runs in the
+    /// window, or else the window's title from tmux.
+    public func tabTitle(for window: TmuxWindow) -> String {
+        if let session = claudeSession(in: window) { return session.title }
+        // tmux names a window running Claude Code after its version.
+        return ClaudeSession.isClaudeProcess(window.title) ? "Claude" : window.title
     }
 
     /// Apply a `%window-renamed` notification. tmux sends one for every

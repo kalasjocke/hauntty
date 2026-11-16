@@ -78,6 +78,9 @@ struct ControlClientTests {
         #expect(store.windows.first?.paneCount == 2)
         try tmux("split-window", "-d", "-t", first, "cat")
         #expect(await waitUntil { store.windows.first?.paneCount == 3 })
+        let panes = try tmux("list-panes", "-t", first, "-F", "#{pane_id}").split(separator: "\n").map(String.init)
+        #expect(store.windows.first?.paneIDs == panes)
+        #expect(store.windows.first?.activePaneID == (try tmux("display-message", "-p", "-t", first, "#{pane_id}")))
         try tmux("select-pane", "-t", "\(first).0")
         #expect(await waitUntil { store.windows.first?.title == "top" })
 

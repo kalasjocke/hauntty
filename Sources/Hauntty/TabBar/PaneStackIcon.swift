@@ -3,12 +3,15 @@ import SwiftUI
 
 /// The SF Symbol for a process. A placeholder set until there are real icons.
 enum ProcessIcon {
+    /// Not an SF Symbol: the icon draws the Claude mark for it.
+    static let claude = "hauntty.claude"
+
     static func symbol(for command: String) -> String {
         switch command {
         case "nvim", "vim", "vi", "hx", "nano": return "pencil"
         // A new pane runs as a copy of tmux until its shell starts.
         case "zsh", "bash", "fish", "sh", "tmux": return "chevron.right"
-        case "claude": return "sparkle"
+        case "claude": return claude
         case "node", "bun", "deno": return "hexagon"
         case "top", "htop", "btop": return "chart.bar.fill"
         case "git", "lazygit", "tig": return "arrow.triangle.branch"
@@ -64,10 +67,19 @@ struct PaneStackIcon: View {
             tile(fill: fills[0], radius: radius)
                 .frame(width: width, height: height)
                 .overlay {
-                    Image(systemName: symbol)
-                        .font(.system(size: 7.5, weight: .bold))
-                        .foregroundStyle(color)
-                        .opacity(tileOpacity)
+                    Group {
+                        if symbol == ProcessIcon.claude {
+                            Image(nsImage: ClaudeMark.image)
+                                .resizable()
+                                .frame(width: 9, height: 9)
+                                .foregroundStyle(color)
+                        } else {
+                            Image(systemName: symbol)
+                                .font(.system(size: 7.5, weight: .bold))
+                                .foregroundStyle(color)
+                        }
+                    }
+                    .opacity(tileOpacity)
                 }
                 .overlay(alignment: .topTrailing) {
                     if let status {
