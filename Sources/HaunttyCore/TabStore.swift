@@ -203,10 +203,21 @@ public final class TabStore {
     public func tabTitle(for window: TmuxWindow) -> String {
         if Self.isClaudeProcess(window.command) {
             let title = Self.droppingMark(window.paneTitle)
+            if let agents = Self.agentsTitle(title) { return agents }
             if !title.isEmpty { return title }
         }
         // tmux names a window running Claude Code after its version.
         return Self.isClaudeProcess(window.title) ? "Claude" : window.title
+    }
+
+    /// Claude Code's agents view titles its pane `claude agents`, or
+    /// `2 awaiting input · claude agents` while sessions wait for input.
+    /// Show it as `Agents` or `Agents (2)`.
+    static func agentsTitle(_ title: String) -> String? {
+        if title == "claude agents" { return "Agents" }
+        let suffix = " awaiting input · claude agents"
+        guard title.hasSuffix(suffix), let count = Int(title.dropLast(suffix.count)) else { return nil }
+        return "Agents (\(count))"
     }
 
     /// Claude Code runs from `~/.local/share/claude/versions/<version>`, so
