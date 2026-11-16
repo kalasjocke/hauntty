@@ -6,7 +6,7 @@ import SwiftUI
 /// The titlebar and its buttons are hidden, like Ghostty's
 /// `macos-titlebar-style = hidden`.
 final class TerminalWindowController: NSWindowController, NSWindowDelegate {
-    static let tabBarHeight: CGFloat = 36
+    static let tabBarHeight: CGFloat = 41
 
     private let surfaceView: SurfaceView
 
@@ -15,7 +15,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         surfaceView = SurfaceView(app: ghostty.app!, command: command)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
+            contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false)
@@ -50,6 +50,9 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
                 surfaceView?.window?.makeFirstResponder(surfaceView)
             }))
         tabBar.sizingOptions = []
+        // The hidden titlebar still counts as a safe area, which would push
+        // the tabs 28 points down, over the terminal.
+        tabBar.safeAreaRegions = []
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(tabBar)
 
