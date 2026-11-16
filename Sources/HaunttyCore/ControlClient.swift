@@ -247,7 +247,7 @@ public final class ControlClient {
         guard let id = store.activeID,
               store.windows.first(where: { $0.id == id })?.status == .done
         else { return }
-        send("set-option -w -u -t \(id) @hauntty-status")
+        send("set-option -w -u -t \(id) @state")
         store.clearStatus(id)
     }
 

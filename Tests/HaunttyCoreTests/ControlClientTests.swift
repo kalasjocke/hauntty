@@ -99,31 +99,31 @@ struct ControlClientTests {
         }
 
         // A program sets the window's status through a window option.
-        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "blocked")
+        try tmux("set-option", "-w", "-t", first, "@state", "blocked")
         #expect(await waitUntil { store.windows.first?.status == .blocked })
-        try tmux("set-option", "-w", "-u", "-t", first, "@hauntty-status")
+        try tmux("set-option", "-w", "-u", "-t", first, "@state")
         #expect(await waitUntil { store.windows.first?.status == nil })
 
         // Done shows only on background tabs. It stays until the user
         // switches to the window, from tmux or by clicking the tab.
-        try tmux("set-option", "-w", "-t", second, "@hauntty-status", "done")
+        try tmux("set-option", "-w", "-t", second, "@state", "done")
         #expect(await waitUntil { store.windows.map(\.status) == [nil, .done] })
         try tmux("select-window", "-t", second)
         #expect(await waitUntil { store.windows.map(\.status) == [nil, nil] })
-        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "done")
+        try tmux("set-option", "-w", "-t", first, "@state", "done")
         #expect(await waitUntil { store.windows.map(\.status) == [.done, nil] })
         client.selectWindow(first)
         #expect(await waitUntil { store.windows.map(\.status) == [nil, nil] })
-        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@hauntty-status").isEmpty)
+        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@state").isEmpty)
 
         // The active window clears done as soon as it gets it, but keeps
         // working.
-        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "working")
+        try tmux("set-option", "-w", "-t", first, "@state", "working")
         #expect(await waitUntil { store.windows.first?.status == .working })
-        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "done")
+        try tmux("set-option", "-w", "-t", first, "@state", "done")
         try await Task.sleep(for: .milliseconds(1500))
         #expect(store.windows.first?.status == nil)
-        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@hauntty-status").isEmpty)
+        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@state").isEmpty)
 
         // A window the user renamed shows its name. Turning automatic-rename
         // back on lets tmux name it after the process again.
