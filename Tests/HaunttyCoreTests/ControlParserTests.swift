@@ -46,13 +46,13 @@ private let expected: [ControlEvent] = [
     .notification(.windowRenamed(windowID: "@1", name: "tmux")),
     .notification(.sessionWindowChanged(sessionID: "$0", windowID: "@1")),
     .notification(.layoutChange(windowID: "@1")),
-    .notification(.subscriptionChanged(name: "tabs", windowID: "@0", value: "0 zsh")),
-    .notification(.subscriptionChanged(name: "tabs", windowID: "@1", value: "1 zsh")),
+    .notification(.subscriptionChanged(name: "tabs", windowID: "@0", paneID: nil, value: "0 zsh")),
+    .notification(.subscriptionChanged(name: "tabs", windowID: "@1", paneID: nil, value: "1 zsh")),
     .notification(.windowRenamed(windowID: "@1", name: "zsh")),
     .notification(.windowAdd(windowID: "@1")),
     .notification(.sessionWindowChanged(sessionID: "$0", windowID: "@1")),
     .notification(.windowClose(windowID: "@1")),
-    .notification(.subscriptionChanged(name: "tabs", windowID: "@1", value: "5 zsh")),
+    .notification(.subscriptionChanged(name: "tabs", windowID: "@1", paneID: nil, value: "5 zsh")),
     .notification(.sessionWindowChanged(sessionID: "$0", windowID: "@0")),
     .notification(.windowClose(windowID: "@1")),
     .notification(.exit(reason: nil)),
@@ -101,16 +101,18 @@ private let expected: [ControlEvent] = [
         ])
     }
 
-    @Test func parsesSubscriptionValuesWithColonsAndSessionSubscriptions() {
+    @Test func parsesSubscriptionValuesWithColonsAndSessionAndPaneSubscriptions() {
         var parser = ControlParser()
         let input = """
             %subscription-changed tabs $0 @3 2 - : 2 a : b
             %subscription-changed status $0 - - - : on
+            %subscription-changed panes $0 @3 2 %7 : nvim
 
             """
         #expect(parser.feed(Array(input.utf8)) == [
-            .notification(.subscriptionChanged(name: "tabs", windowID: "@3", value: "2 a : b")),
-            .notification(.subscriptionChanged(name: "status", windowID: nil, value: "on")),
+            .notification(.subscriptionChanged(name: "tabs", windowID: "@3", paneID: nil, value: "2 a : b")),
+            .notification(.subscriptionChanged(name: "status", windowID: nil, paneID: nil, value: "on")),
+            .notification(.subscriptionChanged(name: "panes", windowID: "@3", paneID: "%7", value: "nvim")),
         ])
     }
 

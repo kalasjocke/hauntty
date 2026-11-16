@@ -66,17 +66,25 @@ public final class TabStore {
     /// subscription has reported a window, its fields win over reloads.
     private var reported: [String: Report] = [:]
 
+    /// The process in each pane, by pane id, as the pane subscription last
+    /// reported it. Like `reported`, it wins over reloads. Keeping every
+    /// pane's process lets a tab show the new focused pane's process as
+    /// soon as tmux says the focus moved.
+    private var paneCommands: [String: String] = [:]
+
     fileprivate struct Report: Equatable {
         var index: Int
         var status: WindowStatus?
-        var command: String
         var title: String
     }
 
     /// What the tmux subscription reports for each window, read by
     /// `applyReport`. The title is last so it may contain the separator.
-    public static let reportFormat =
-        "#{window_index}|#{@hauntty-status}|#{pane_current_command}|" + titleFormat
+    public static let reportFormat = "#{window_index}|#{@hauntty-status}|" + titleFormat
+
+    /// What the tmux subscription reports for each pane, read by
+    /// `applyPaneReport`.
+    public static let paneReportFormat = "#{pane_current_command}"
 
     /// The tab title: the window name, as tmux's own status bar shows it.
     /// tmux keeps it set to the focused process while `automatic-rename` is
@@ -112,11 +120,13 @@ public final class TabStore {
                 status: WindowStatus(rawValue: String(fields[4])),
                 activePaneID: String(fields[5]),
                 paneIDs: fields[6].split(separator: " ").map(String.init))
-            parsed.append(window.applying(reported[window.id]))
+            parsed.append(window.applying(reported[window.id], paneCommands: paneCommands))
             if fields[2] == "1" { active = window.id }
         }
         parsed.sort { $0.index < $1.index }
         reported = reported.filter { id, _ in parsed.contains { $0.id == id } }
+        let panes = Set(parsed.flatMap(\.paneIDs))
+        paneCommands = paneCommands.filter { panes.contains($0.key) }
 
         // Assign only on change, so observers do not redraw or animate for
         // reloads that change nothing.
@@ -132,18 +142,35 @@ public final class TabStore {
 
     /// Apply a subscription value in `reportFormat` for one window.
     public func applyReport(windowID: String, value: String) -> ReportResult {
-        let fields = value.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
-        guard fields.count == 4, let index = Int(fields[0]) else { return .needsReload }
+        let fields = value.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard fields.count == 3, let index = Int(fields[0]) else { return .needsReload }
         let report = Report(
-            index: index, status: WindowStatus(rawValue: String(fields[1])),
-            command: String(fields[2]), title: String(fields[3]))
+            index: index, status: WindowStatus(rawValue: String(fields[1])), title: String(fields[2]))
         reported[windowID] = report
         guard let position = windows.firstIndex(where: { $0.id == windowID }),
               windows[position].index == index
         else { return .needsReload }
-        let window = windows[position].applying(report)
+        let window = windows[position].applying(report, paneCommands: paneCommands)
         if window != windows[position] { windows[position] = window }
         return .applied
+    }
+
+    /// Apply a subscription value in `paneReportFormat` for one pane.
+    public func applyPaneReport(paneID: String, value: String) {
+        paneCommands[paneID] = value
+        for position in windows.indices where windows[position].activePaneID == paneID {
+            if windows[position].command != value { windows[position].command = value }
+        }
+    }
+
+    /// Apply a `%window-pane-changed` notification: show the newly focused
+    /// pane's process without waiting for a reload.
+    public func applyActivePane(windowID: String, paneID: String) {
+        guard let position = windows.firstIndex(where: { $0.id == windowID }) else { return }
+        var window = windows[position]
+        window.activePaneID = paneID
+        if let command = paneCommands[paneID] { window.command = command }
+        if window != windows[position] { windows[position] = window }
     }
 
     /// Clear a window's status after Hauntty unsets it in tmux, before the
@@ -201,13 +228,13 @@ public final class TabStore {
 }
 
 private extension TmuxWindow {
-    /// The window with the subscription's fields, except the index, which
+    /// The window with the subscriptions' fields, except the index, which
     /// only a reload changes so the order stays consistent.
-    func applying(_ report: TabStore.Report?) -> TmuxWindow {
-        guard let report else { return self }
+    func applying(_ report: TabStore.Report?, paneCommands: [String: String]) -> TmuxWindow {
         var window = self
+        if let command = paneCommands[activePaneID] { window.command = command }
+        guard let report else { return window }
         window.status = report.status
-        window.command = report.command
         window.title = report.title
         return window
     }
