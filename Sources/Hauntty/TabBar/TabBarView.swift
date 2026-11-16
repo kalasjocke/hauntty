@@ -14,13 +14,14 @@ struct TabBarView: View {
     var body: some View {
         HStack(spacing: 2) {
             ForEach(store.windows) { window in
+                let status = store.status(for: window)
                 TabButton(
                     title: store.tabTitle(for: window),
                     // Claude Code shows up in tmux as its version number.
                     command: store.runsClaude(window) ? "claude" : window.command,
                     paneCount: window.paneCount,
                     // Idle only matters for tabs in the background.
-                    status: window.status == .idle && window.id == store.activeID ? nil : window.status,
+                    status: status == .idle && window.id == store.activeID ? nil : status,
                     isActive: window.id == store.activeID,
                     foreground: foreground,
                     namespace: namespace,
