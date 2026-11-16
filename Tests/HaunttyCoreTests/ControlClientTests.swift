@@ -76,6 +76,33 @@ struct ControlClientTests {
         try tmux("select-pane", "-t", "\(first).0")
         #expect(await waitUntil { store.windows.first?.title == "sleep" })
 
+        // A program sets the window's status through a window option.
+        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "blocked")
+        #expect(await waitUntil { store.windows.first?.status == .blocked })
+        try tmux("set-option", "-w", "-u", "-t", first, "@hauntty-status")
+        #expect(await waitUntil { store.windows.first?.status == nil })
+
+        // Done shows only on background tabs. It stays until the user
+        // switches to the window, from tmux or by clicking the tab.
+        try tmux("set-option", "-w", "-t", second, "@hauntty-status", "done")
+        #expect(await waitUntil { store.windows.map(\.status) == [nil, .done] })
+        try tmux("select-window", "-t", second)
+        #expect(await waitUntil { store.windows.map(\.status) == [nil, nil] })
+        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "done")
+        #expect(await waitUntil { store.windows.map(\.status) == [.done, nil] })
+        client.selectWindow(first)
+        #expect(await waitUntil { store.windows.map(\.status) == [nil, nil] })
+        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@hauntty-status").isEmpty)
+
+        // The active window clears done as soon as it gets it, but keeps
+        // working.
+        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "working")
+        #expect(await waitUntil { store.windows.first?.status == .working })
+        try tmux("set-option", "-w", "-t", first, "@hauntty-status", "done")
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(store.windows.first?.status == nil)
+        #expect(try tmux("show-options", "-w", "-v", "-t", first, "@hauntty-status").isEmpty)
+
         // Moving a window reorders the tabs.
         try tmux("move-window", "-s", second, "-t", "hauntty:7")
         try tmux("move-window", "-s", first, "-t", "hauntty:9")

@@ -1,5 +1,22 @@
 import Observation
 
+/// What a program in a window reports through the `@hauntty-status` window
+/// option, for example from a Claude Code hook:
+/// `tmux set -w @hauntty-status working`. The states are the ones in the
+/// OSC 7501 program status proposal:
+/// https://mitchellh.com/writing/program-status-osc7501
+public enum WindowStatus: String, Sendable {
+    /// At rest, waiting for the user's next instruction.
+    case idle
+    case working
+    /// Finished, and the user has not seen the result yet.
+    case done
+    /// Cannot continue until the user does something.
+    case blocked
+    /// Failed and stopped.
+    case error
+}
+
 /// One tmux window, shown as one tab.
 public struct TmuxWindow: Identifiable, Equatable, Sendable {
     /// The tmux window id, like `@3`.
@@ -8,12 +25,14 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
     /// The process running in the window's focused pane.
     public var title: String
     public var paneCount: Int
+    public var status: WindowStatus?
 
-    public init(id: String, index: Int, title: String, paneCount: Int = 1) {
+    public init(id: String, index: Int, title: String, paneCount: Int = 1, status: WindowStatus? = nil) {
         self.id = id
         self.index = index
         self.title = title
         self.paneCount = paneCount
+        self.status = status
     }
 }
 
@@ -27,7 +46,7 @@ public final class TabStore {
     /// The `list-windows -F` format that `applyWindowList` reads. The title
     /// is last so it may contain the separator.
     public static let windowListFormat =
-        "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{pane_current_command}"
+        "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{@hauntty-status}|#{pane_current_command}"
 
     public init() {}
 
@@ -36,12 +55,13 @@ public final class TabStore {
         var parsed: [TmuxWindow] = []
         var active: String?
         for line in lines {
-            let fields = line.split(separator: "|", maxSplits: 4, omittingEmptySubsequences: false)
-            guard fields.count == 5, fields[0].hasPrefix("@"),
+            let fields = line.split(separator: "|", maxSplits: 5, omittingEmptySubsequences: false)
+            guard fields.count == 6, fields[0].hasPrefix("@"),
                   let index = Int(fields[1]), let paneCount = Int(fields[3])
             else { continue }
             let window = TmuxWindow(
-                id: String(fields[0]), index: index, title: String(fields[4]), paneCount: paneCount)
+                id: String(fields[0]), index: index, title: String(fields[5]), paneCount: paneCount,
+                status: WindowStatus(rawValue: String(fields[4])))
             parsed.append(window)
             if fields[2] == "1" { active = window.id }
         }

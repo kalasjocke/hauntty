@@ -17,6 +17,8 @@ struct TabBarView: View {
                 TabButton(
                     title: window.title,
                     paneCount: window.paneCount,
+                    // Idle only matters for tabs in the background.
+                    status: window.status == .idle && window.id == store.activeID ? nil : window.status,
                     isActive: window.id == store.activeID,
                     foreground: foreground,
                     namespace: namespace,
@@ -43,6 +45,7 @@ struct TabBarView: View {
 private struct TabButton: View {
     let title: String
     let paneCount: Int
+    let status: WindowStatus?
     let isActive: Bool
     let foreground: Color
     let namespace: Namespace.ID
@@ -55,14 +58,16 @@ private struct TabButton: View {
             PaneStackIcon(
                 symbol: ProcessIcon.symbol(for: title),
                 paneCount: paneCount,
-                color: foreground)
+                status: status,
+                color: foreground,
+                tileOpacity: isActive ? 1 : 0.6)
             Text(title)
                 .font(.system(size: 12, weight: isActive ? .semibold : .regular))
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .opacity(isActive ? 1 : 0.6)
         }
             .foregroundStyle(foreground)
-            .opacity(isActive ? 1 : 0.6)
             .padding(.horizontal, 12)
             .frame(maxWidth: 160, maxHeight: .infinity)
             .background {

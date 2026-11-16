@@ -28,13 +28,16 @@ public final class ControlClient {
     private var retryDelay: TimeInterval = ControlClient.minimumRetryDelay
     private var reloadInFlight = false
     private var reloadQueued = false
+    /// The window whose done status is being cleared, so it is cleared once.
+    private var clearingID: String?
 
     private static let minimumRetryDelay: TimeInterval = 0.1
     private static let maximumRetryDelay: TimeInterval = 2
 
-    /// Subscription that reports each window's index and focused process. A
-    /// change reloads the window list. tmux checks it at most once a second.
-    static let subscription = "hauntty-tabs:@*:#{window_index} #{pane_current_command}"
+    /// Subscription that reports each window's index, status and focused
+    /// process. A change reloads the window list. tmux checks it at most once
+    /// a second.
+    static let subscription = "hauntty-tabs:@*:#{window_index} #{@hauntty-status} #{pane_current_command}"
 
     /// - Parameters:
     ///   - executable: Path to tmux, or a bare name to look up in PATH.
@@ -149,6 +152,7 @@ public final class ControlClient {
         attached = false
         reloadInFlight = false
         reloadQueued = false
+        clearingID = nil
     }
 
     // MARK: Protocol
@@ -202,12 +206,31 @@ public final class ControlClient {
         send("list-windows -F \(Self.quoted(TabStore.windowListFormat))") { [weak self] reply in
             guard let self else { return }
             reloadInFlight = false
-            if !reply.isError { store.applyWindowList(reply.lines) }
+            if !reply.isError {
+                store.applyWindowList(reply.lines)
+                clearDoneInActiveWindow()
+            }
             if reloadQueued {
                 reloadQueued = false
                 reload()
             }
         }
+    }
+
+    /// A `done` status means "come and look", so it only shows on background
+    /// tabs. Clear it when the user switches to the window, or when the
+    /// window finishes while it is the active one.
+    private func clearDoneInActiveWindow() {
+        guard let id = store.activeID,
+              store.windows.first(where: { $0.id == id })?.status == .done
+        else {
+            clearingID = nil
+            return
+        }
+        guard clearingID != id else { return }
+        clearingID = id
+        send("set-option -w -u -t \(id) @hauntty-status")
+        reload()
     }
 
     private func send(_ command: String, reply: @escaping (ControlReply) -> Void = { _ in }) {
