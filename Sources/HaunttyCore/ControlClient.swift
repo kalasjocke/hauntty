@@ -1,25 +1,30 @@
 import Foundation
 
-/// A tmux client in control mode, attached to the same session as the
-/// terminal. It keeps a `TabStore` in sync with the session's windows and
-/// sends tab clicks back to tmux.
+/// A tmux client in control mode that follows the terminal pane's tmux
+/// client: it attaches to whichever session the pane shows, and switches
+/// when the pane switches. It keeps a `TabStore` in sync with that session's
+/// windows and sends tab clicks back to tmux.
 ///
-/// The terminal surface creates the session, so the client retries until the
-/// session exists, and reconnects if it drops.
+/// The pane starts tmux, so the client retries until a session exists and
+/// the pane's client shows up, and reconnects if it drops.
 @MainActor
 public final class ControlClient {
     public let store: TabStore
 
     private let executable: String
     private let socketName: String?
-    private let session: String
+    private let paneClient: @MainActor () -> String?
 
     private var process: Process?
     private var input: FileHandle?
     private var parser = ControlParser()
     /// Handlers for commands sent but not yet answered, in order.
     private var pending: [(ControlReply) -> Void] = []
+    /// The session this client is attached to.
     private var sessionID: String?
+    /// The session the pane's client is on, once it is known. The tabs show
+    /// it only once `sessionID` matches.
+    private var paneSessionID: String?
     private var attached = false
     private var stopped = true
     /// Bumped on every launch and stop, so output from an old process is
@@ -31,6 +36,7 @@ public final class ControlClient {
 
     private static let minimumRetryDelay: TimeInterval = 0.1
     private static let maximumRetryDelay: TimeInterval = 2
+    private static let paneLookupDelay: TimeInterval = 0.25
 
     /// Subscription that reports each window's index, status and title,
     /// which the store applies directly. tmux checks it at most once a
@@ -46,12 +52,17 @@ public final class ControlClient {
     /// - Parameters:
     ///   - executable: Path to tmux, or a bare name to look up in PATH.
     ///   - socketName: A tmux `-L` socket name, or nil for the default server.
-    ///   - session: The session to attach to, matched exactly.
-    public init(executable: String, socketName: String? = nil, session: String, store: TabStore) {
+    ///   - paneClient: The tmux client name of the terminal pane's tmux, or
+    ///     nil while it is not known yet. For a terminal client this is its
+    ///     tty path, like `/dev/ttys012`.
+    public init(
+        executable: String, socketName: String? = nil, store: TabStore,
+        paneClient: @escaping @MainActor () -> String?
+    ) {
         self.executable = executable
         self.socketName = socketName
-        self.session = session
         self.store = store
+        self.paneClient = paneClient
     }
 
     public func start() {
@@ -83,7 +94,9 @@ public final class ControlClient {
 
         var arguments: [String] = []
         if let socketName { arguments += ["-L", socketName] }
-        arguments += ["-C", "attach-session", "-t", "=\(session)", "-f", "ignore-size,no-output"]
+        // Attach to any session. The client switches to the pane's session
+        // once it finds the pane's client.
+        arguments += ["-C", "attach-session", "-f", "ignore-size,no-output"]
 
         let process = Process()
         if executable.contains("/") {
@@ -153,6 +166,7 @@ public final class ControlClient {
         parser = ControlParser()
         pending.removeAll()
         sessionID = nil
+        paneSessionID = nil
         attached = false
         reloadInFlight = false
         reloadQueued = false
@@ -175,7 +189,7 @@ public final class ControlClient {
             retryDelay = Self.minimumRetryDelay
             send("refresh-client -B \(Self.quoted(Self.subscription))")
             send("refresh-client -B \(Self.quoted(Self.paneSubscription))")
-            reload()
+            lookUpPane()
         }
 
         switch event {
@@ -186,7 +200,10 @@ public final class ControlClient {
             switch notification {
             case .sessionChanged(let id, _):
                 sessionID = id
-                reload()
+                if let paneSessionID { followPane(to: paneSessionID) }
+            case .clientSessionChanged(let client, let id, _):
+                guard client == paneClient() else { return }
+                followPane(to: id)
             case .sessionWindowChanged(let id, let windowID):
                 guard id == sessionID else { return }
                 store.setActive(windowID)
@@ -219,9 +236,45 @@ public final class ControlClient {
         }
     }
 
+    /// Find the session the pane's client is on. The pane may start tmux
+    /// after this client attached, so look again until the client shows up.
+    /// After that, `%client-session-changed` reports its switches.
+    private func lookUpPane() {
+        let generation = generation
+        send("list-clients -F \(Self.quoted("#{client_name}|#{session_id}"))") { [weak self] reply in
+            guard let self, paneSessionID == nil else { return }
+            if let name = paneClient(), !reply.isError,
+               let line = reply.lines.first(where: { $0.hasPrefix(name + "|") }) {
+                followPane(to: String(line.dropFirst(name.count + 1)))
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.paneLookupDelay) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.attached, generation == self.generation,
+                          self.paneSessionID == nil
+                    else { return }
+                    self.lookUpPane()
+                }
+            }
+        }
+    }
+
+    /// Show the pane's session: switch this client to it, or reload if it is
+    /// already there. tmux confirms a switch with `%session-changed`.
+    private func followPane(to id: String) {
+        paneSessionID = id
+        if id == sessionID {
+            reload()
+        } else {
+            send("switch-client -t \(Self.quoted(id))")
+        }
+    }
+
     /// Refresh the store from `list-windows`. Bursts of notifications send
-    /// at most one more request after the one in flight.
+    /// at most one more request after the one in flight. Until this client
+    /// is on the pane's session, the tabs stay as they are.
     private func reload() {
+        guard sessionID != nil, sessionID == paneSessionID else { return }
         if reloadInFlight {
             reloadQueued = true
             return

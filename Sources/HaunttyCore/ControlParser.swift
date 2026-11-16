@@ -21,6 +21,9 @@ public struct ControlReply: Equatable, Sendable {
 /// The control-mode notifications Hauntty uses. The rest arrive as `other`.
 public enum ControlNotification: Equatable, Sendable {
     case sessionChanged(sessionID: String, name: String)
+    /// Another client attached to a session or switched to one. `client` is
+    /// its name: the tty path for a terminal client, like `/dev/ttys012`.
+    case clientSessionChanged(client: String, sessionID: String, name: String)
     case sessionWindowChanged(sessionID: String, windowID: String)
     case windowAdd(windowID: String)
     case windowClose(windowID: String)
@@ -116,6 +119,9 @@ public struct ControlParser {
         case "session-changed" where words.count >= 2:
             // The session name may contain spaces.
             return .sessionChanged(sessionID: words[0], name: words.dropFirst().joined(separator: " "))
+        case "client-session-changed" where words.count >= 3:
+            return .clientSessionChanged(
+                client: words[0], sessionID: words[1], name: words.dropFirst(2).joined(separator: " "))
         case "session-window-changed" where words.count >= 2:
             return .sessionWindowChanged(sessionID: words[0], windowID: words[1])
         case "window-add" where words.count >= 1:

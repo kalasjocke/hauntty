@@ -120,11 +120,13 @@ private let expected: [ControlEvent] = [
         var parser = ControlParser()
         let input = """
             %session-changed $4 my session
+            %client-session-changed /dev/ttys012 $4 my session
             %exit server exited
 
             """
         #expect(parser.feed(Array(input.utf8)) == [
             .notification(.sessionChanged(sessionID: "$4", name: "my session")),
+            .notification(.clientSessionChanged(client: "/dev/ttys012", sessionID: "$4", name: "my session")),
             .notification(.exit(reason: "server exited")),
         ])
     }
