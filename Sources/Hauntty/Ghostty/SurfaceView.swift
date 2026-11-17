@@ -16,6 +16,20 @@ final class SurfaceView: NSView {
     /// The cell size in pixels, reported by libghostty.
     var cellSizeInPixels: NSSize = .zero
 
+    /// The path of the terminal's tty, like `/dev/ttys012`, or nil before
+    /// the process has started. tmux names a client after its tty.
+    var ttyPath: String? {
+        if let cachedTTYPath { return cachedTTYPath }
+        guard let surface else { return nil }
+        // libghostty reports the pty's foreground process group, whose
+        // leader has the pty as its controlling terminal.
+        let pid = pid_t(truncatingIfNeeded: ghostty_surface_foreground_pid(surface))
+        guard pid > 0 else { return nil }
+        cachedTTYPath = Self.controllingTTY(of: pid)
+        return cachedTTYPath
+    }
+    private var cachedTTYPath: String?
+
     private var focused = false
     private var markedText = NSMutableAttributedString()
     /// Non-nil while handling keyDown. Collects text committed by the input
@@ -61,6 +75,17 @@ final class SurfaceView: NSView {
     deinit {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
         if let surface { ghostty_surface_free(surface) }
+    }
+
+    private static func controllingTTY(of pid: pid_t) -> String? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let device = info.kp_eproc.e_tdev
+        // NODEV: the process has no controlling terminal.
+        guard device != -1, let name = devname(device, S_IFCHR) else { return nil }
+        return "/dev/" + String(cString: name)
     }
 
     // MARK: Size and scale

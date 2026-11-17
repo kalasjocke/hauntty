@@ -10,6 +10,9 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     private let surfaceView: SurfaceView
 
+    /// The tmux client name of the tmux running in the terminal: its tty.
+    var paneClient: String? { surfaceView.ttyPath }
+
     /// - Parameter onSelectTab: Called with the tmux window id of a clicked tab.
     init(ghostty: GhosttyApp, command: String, tabs: TabStore, onSelectTab: @escaping (String) -> Void) {
         surfaceView = SurfaceView(app: ghostty.app!, command: command)

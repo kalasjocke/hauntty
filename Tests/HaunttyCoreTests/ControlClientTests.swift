@@ -38,6 +38,12 @@ struct ControlClientTests {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines)
     }
 
+    /// Attach a client that stands in for the tmux in the terminal pane.
+    /// It is a control-mode client, so it needs no tty.
+    func attachPane(to session: String) throws -> PaneClient {
+        try PaneClient(arguments: ["-L", socket, "-f", "/dev/null", "-C", "attach-session", "-t", "=\(session)"])
+    }
+
     func waitUntil(within timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(Double(timeout.components.seconds)
             + Double(timeout.components.attoseconds) / 1e18)
@@ -51,9 +57,11 @@ struct ControlClientTests {
     @Test func followsTheSession() async throws {
         try tmux("new-session", "-d", "-s", "hauntty", "-x", "100", "-y", "30", "top")
         defer { _ = try? tmux("kill-server") }
+        let pane = try attachPane(to: "hauntty")
+        defer { pane.detach() }
 
         let store = TabStore()
-        let client = ControlClient(executable: tmuxPath!, socketName: socket, session: "hauntty", store: store)
+        let client = ControlClient(executable: tmuxPath!, socketName: socket, store: store) { pane.name }
         client.start()
         defer { client.stop() }
 
@@ -161,9 +169,11 @@ struct ControlClientTests {
     @Test func iconChangesWithTheTitleWhenAProgramStartsAndEnds() async throws {
         try tmux("new-session", "-d", "-s", "hauntty", "-x", "100", "-y", "30", "zsh -f")
         defer { _ = try? tmux("kill-server") }
+        let pane = try attachPane(to: "hauntty")
+        defer { pane.detach() }
 
         let store = TabStore()
-        let client = ControlClient(executable: tmuxPath!, socketName: socket, session: "hauntty", store: store)
+        let client = ControlClient(executable: tmuxPath!, socketName: socket, store: store) { pane.name }
         client.start()
         defer { client.stop() }
         #expect(await waitUntil { store.windows.first?.command == "zsh" })
@@ -178,31 +188,90 @@ struct ControlClientTests {
         }
     }
 
-    @Test func waitsForTheSessionToExist() async throws {
+    @Test func waitsForThePaneToAttach() async throws {
         defer { _ = try? tmux("kill-server") }
 
+        // The pane's client name is not known until its tmux starts.
+        var paneName: String?
         let store = TabStore()
-        let client = ControlClient(executable: tmuxPath!, socketName: socket, session: "hauntty", store: store)
+        let client = ControlClient(executable: tmuxPath!, socketName: socket, store: store) { paneName }
         client.start()
         defer { client.stop() }
 
         try await Task.sleep(for: .milliseconds(300))
         #expect(store.windows.isEmpty)
 
+        // Another session exists before the pane's, so the client first
+        // attaches to the wrong one. Its tabs must not show.
+        try tmux("new-session", "-d", "-s", "other", ping)
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(store.windows.isEmpty)
+
         try tmux("new-session", "-d", "-s", "hauntty", "top")
+        let pane = try attachPane(to: "hauntty")
+        defer { pane.detach() }
+        paneName = pane.name
         #expect(await waitUntil { store.windows.map(\.title) == ["top"] })
     }
 
-    @Test func doesNotAttachToASessionThatOnlyStartsWithTheName() async throws {
-        try tmux("new-session", "-d", "-s", "hauntty-extra", "sleep 600")
+    @Test func followsThePaneToAnotherSession() async throws {
+        try tmux("new-session", "-d", "-s", "work", "-x", "100", "-y", "30", "top")
+        try tmux("new-session", "-d", "-s", "play", "-x", "100", "-y", "30", ping)
         defer { _ = try? tmux("kill-server") }
+        let pane = try attachPane(to: "work")
+        defer { pane.detach() }
+        // A client on another session, attached last, so tmux would pick
+        // its session for a client attaching without a target.
+        let other = try attachPane(to: "play")
+        defer { other.detach() }
 
         let store = TabStore()
-        let client = ControlClient(executable: tmuxPath!, socketName: socket, session: "hauntty", store: store)
+        let client = ControlClient(executable: tmuxPath!, socketName: socket, store: store) { pane.name }
         client.start()
         defer { client.stop() }
+        #expect(await waitUntil { store.windows.map(\.title) == ["top"] })
 
+        // The pane switches session, as with `switch-client` or choose-tree.
+        try tmux("switch-client", "-c", pane.name, "-t", "=play")
+        #expect(await waitUntil { store.windows.map(\.title) == ["ping"] })
+
+        // Clicking a tab selects the window in the pane's session.
+        try tmux("new-window", "-d", "-t", "play:", "top")
+        #expect(await waitUntil { store.windows.map(\.title) == ["ping", "top"] })
+        client.selectWindow(store.windows[1].id)
+        #expect(await waitUntil {
+            (try? tmux("display-message", "-p", "-c", pane.name, "#{window_name}")) == "top"
+        })
+
+        // Other clients switching session do not move the tabs.
+        try tmux("switch-client", "-c", other.name, "-t", "=work")
         try await Task.sleep(for: .milliseconds(500))
-        #expect(store.windows.isEmpty)
+        #expect(store.windows.map(\.title) == ["ping", "top"])
+    }
+}
+
+/// A control-mode tmux client, named `client-<pid>` by tmux.
+final class PaneClient {
+    private let process = Process()
+    private let input = Pipe()
+
+    init(arguments: [String]) throws {
+        process.executableURL = URL(fileURLWithPath: tmuxPath!)
+        process.arguments = arguments
+        var environment = ProcessInfo.processInfo.environment
+        environment["TMUX"] = nil
+        process.environment = environment
+        // Control mode exits when its input closes, so keep the pipe open.
+        process.standardInput = input
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+    }
+
+    var name: String { "client-\(process.processIdentifier)" }
+
+    func detach() {
+        try? input.fileHandleForWriting.close()
+        process.terminate()
     }
 }

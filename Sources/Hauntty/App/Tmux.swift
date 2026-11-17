@@ -1,7 +1,8 @@
 import Foundation
 
 enum Tmux {
-    /// The tmux session every Hauntty window attaches to.
+    /// The session the terminal opens. The tab bar follows whichever session
+    /// the terminal shows, so switching sessions in tmux works too.
     static let sessionName = "hauntty"
 
     /// The tmux binary. Apps opened from Finder do not get the shell's PATH,
