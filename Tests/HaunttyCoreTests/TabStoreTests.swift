@@ -73,6 +73,18 @@ import Testing
         #expect(store.tabTitle(for: store.windows[0]) == "slack-mentions")
     }
 
+    @Test func titlesClaudesAgentsViewWithTheSessionsAwaitingInput() {
+        let store = TabStore()
+        store.applyWindowList(["@0|0|1|1||%0|%0 |2.1.326|2.1.326"])
+        store.applyPaneReport(paneID: "%0", value: "2.1.326|claude agents")
+        #expect(store.tabTitle(for: store.windows[0]) == "Agents")
+        store.applyPaneReport(paneID: "%0", value: "2.1.326|12 awaiting input · claude agents")
+        #expect(store.tabTitle(for: store.windows[0]) == "Agents (12)")
+        // A session can have a name that only looks similar.
+        store.applyPaneReport(paneID: "%0", value: "2.1.326|some awaiting input · claude agents")
+        #expect(store.tabTitle(for: store.windows[0]) == "some awaiting input · claude agents")
+    }
+
     @Test func subscriptionValuesWinOverReloads() {
         let store = TabStore()
         store.applyWindowList(["@0|0|1|1||%0|%0 |zsh|zsh"])
