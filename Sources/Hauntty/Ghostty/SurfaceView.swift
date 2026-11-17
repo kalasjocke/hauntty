@@ -1,11 +1,12 @@
 // A view hosting one libghostty surface. Adapted from Ghostty's macOS app
 // (MIT license): macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift.
-// Hauntty keeps the keyboard, IME, mouse and scroll handling and drops splits,
-// search, the inspector, notifications and drag and drop.
+// Hauntty keeps the keyboard, IME, mouse, scroll and drag and drop handling
+// and drops splits, search, the inspector and notifications.
 
 import AppKit
 import Carbon
 import GhosttyKit
+import HaunttyCore
 
 final class SurfaceView: NSView {
     private(set) var surface: ghostty_surface_t?
@@ -66,6 +67,7 @@ final class SurfaceView: NSView {
         }
 
         updateTrackingAreas()
+        registerForDraggedTypes(Self.dropTypes)
     }
 
     required init?(coder: NSCoder) {
@@ -521,6 +523,36 @@ final class SurfaceView: NSView {
         } else if clearIfNeeded {
             ghostty_surface_preedit(surface, nil, 0)
         }
+    }
+}
+
+// MARK: - Drag and drop
+
+extension SurfaceView {
+    static let dropTypes: [NSPasteboard.PasteboardType] = [.fileURL, .string]
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let types = sender.draggingPasteboard.types ?? []
+        return types.contains(where: Self.dropTypes.contains) ? .copy : []
+    }
+
+    /// Paste a dropped file's escaped path, or dropped text, at the cursor.
+    /// The paste goes through libghostty, so paste protection asks before
+    /// unsafe text, as it does for the clipboard.
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let items: [DropText.Item] = (sender.draggingPasteboard.pasteboardItems ?? []).compactMap { item in
+            if let plist = item.propertyList(forType: .fileURL),
+               let url = NSURL(pasteboardPropertyList: plist, ofType: .fileURL) as URL?,
+               url.isFileURL {
+                return .file(path: url.path)
+            }
+            return item.string(forType: .string).map { .text($0) }
+        }
+        guard let surface, let text = DropText.text(for: items) else { return false }
+        let length = text.utf8.count
+        guard length > 0 else { return false }
+        text.withCString { ghostty_surface_paste_text(surface, $0, UInt(length)) }
+        return true
     }
 }
 
