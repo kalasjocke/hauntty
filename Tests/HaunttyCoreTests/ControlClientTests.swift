@@ -230,10 +230,14 @@ struct ControlClientTests {
         client.start()
         defer { client.stop() }
         #expect(await waitUntil { store.windows.map(\.title) == ["top"] })
+        #expect(try tmux("show-options", "-v", "-t", "work", "status") == "off")
+        #expect(try tmux("show-options", "-v", "-t", "play", "status").isEmpty)
 
         // The pane switches session, as with `switch-client` or choose-tree.
+        // The tabs replace that session's status bar too.
         try tmux("switch-client", "-c", pane.name, "-t", "=play")
         #expect(await waitUntil { store.windows.map(\.title) == ["ping"] })
+        #expect(try tmux("show-options", "-v", "-t", "play", "status") == "off")
 
         // Clicking a tab selects the window in the pane's session.
         try tmux("new-window", "-d", "-t", "play:", "top")
