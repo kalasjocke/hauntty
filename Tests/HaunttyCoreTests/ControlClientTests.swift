@@ -19,6 +19,11 @@ struct ControlClientTests {
 
     @discardableResult
     func tmux(_ arguments: String...) throws -> String {
+        try tmux(arguments)
+    }
+
+    @discardableResult
+    func tmux(_ arguments: [String]) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tmuxPath!)
         process.arguments = ["-L", socket, "-f", "/dev/null"] + arguments
@@ -151,6 +156,26 @@ struct ControlClientTests {
         // Killing a window removes its tab.
         try tmux("kill-window", "-t", second)
         #expect(await waitUntil { store.windows.map(\.id) == [first] })
+    }
+
+    @Test func iconChangesWithTheTitleWhenAProgramStartsAndEnds() async throws {
+        try tmux("new-session", "-d", "-s", "hauntty", "-x", "100", "-y", "30", "zsh -f")
+        defer { _ = try? tmux("kill-server") }
+
+        let store = TabStore()
+        let client = ControlClient(executable: tmuxPath!, socketName: socket, session: "hauntty", store: store)
+        client.start()
+        defer { client.stop() }
+        #expect(await waitUntil { store.windows.first?.command == "zsh" })
+
+        // tmux renames the window about half a second after the program
+        // starts, and the pane subscription reports it up to a second
+        // later. The icon must not wait for the subscription.
+        for (keys, name) in [(["top", "Enter"], "top"), (["q"], "zsh"), (["top", "Enter"], "top")] {
+            try tmux(["send-keys", "-t", "hauntty"] + keys)
+            #expect(await waitUntil { store.windows.first?.title == name })
+            #expect(await waitUntil(within: .milliseconds(100)) { store.windows.first?.command == name })
+        }
     }
 
     @Test func waitsForTheSessionToExist() async throws {

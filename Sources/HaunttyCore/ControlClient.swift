@@ -200,6 +200,7 @@ public final class ControlClient {
                 store.applyPaneReport(paneID: paneID, value: value)
             case .windowRenamed(let windowID, let name):
                 store.applyRename(windowID: windowID, name: name)
+                readActiveCommand(in: windowID)
                 reload()
             case .windowPaneChanged(let windowID, let paneID):
                 store.applyActivePane(windowID: windowID, paneID: paneID)
@@ -237,6 +238,20 @@ public final class ControlClient {
                 reloadQueued = false
                 reload()
             }
+        }
+    }
+
+    /// tmux renames a window when its focused pane starts or ends a program,
+    /// up to a second before the pane subscription reports the program. Read
+    /// the program then, so the icon changes with the title. Only automatic
+    /// renames follow the program, so a rename by the user is ignored.
+    private func readActiveCommand(in windowID: String) {
+        let format = "#{automatic-rename}|#{pane_id}|#{pane_current_command}"
+        send("display-message -p -t \(windowID) \(Self.quoted(format))") { [weak self] reply in
+            guard let self, !reply.isError, let line = reply.lines.first else { return }
+            let fields = line.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+            guard fields.count == 3, fields[0] == "1" else { return }
+            store.applyPaneReport(paneID: String(fields[1]), value: String(fields[2]))
         }
     }
 
