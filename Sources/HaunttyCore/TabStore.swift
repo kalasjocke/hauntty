@@ -14,6 +14,22 @@ public enum WindowStatus: String, Sendable {
     case blocked
     /// Failed and stopped.
     case error
+
+    /// Which status a tab shows when several apply: blocked over error over
+    /// done over working over idle.
+    var rank: Int {
+        switch self {
+        case .idle: 0
+        case .working: 1
+        case .done: 2
+        case .error: 3
+        case .blocked: 4
+        }
+    }
+
+    /// Whether the status asks the user to come and look, so it clears once
+    /// the user does.
+    var wantsAttention: Bool { self == .done || self == .blocked || self == .error }
 }
 
 /// One tmux window, shown as one tab.
@@ -57,6 +73,11 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
 public final class TabStore {
     public private(set) var windows: [TmuxWindow] = []
     public private(set) var activeID: String?
+    /// Every Claude Code session's state, from `ClaudeSessionFile`.
+    public private(set) var claudeSessions: [ClaudeSession] = []
+
+    /// The tmux socket name, which the sessions file uses to name a pane.
+    private let socketName: String
 
     /// The fields the tmux subscription last reported, by window id.
     ///
@@ -109,7 +130,48 @@ public final class TabStore {
         "#{window_id}|#{window_index}|#{window_active}|#{window_panes}|#{@state}|"
         + "#{pane_id}|#{P:#{pane_id} }|#{pane_current_command}|" + titleFormat
 
-    public init() {}
+    /// - Parameter socketName: The tmux `-L` socket name, `default` for the
+    ///   default server.
+    public init(socketName: String = "default") {
+        self.socketName = socketName
+    }
+
+    public func applyClaudeSessions(_ sessions: [ClaudeSession]) {
+        if sessions != claudeSessions { claudeSessions = sessions }
+    }
+
+    /// The tab's status: the highest of the window's `@state` option and the
+    /// states of the Claude Code sessions its panes show.
+    public func status(for window: TmuxWindow) -> WindowStatus? {
+        ([window.status].compactMap { $0 } + claudeSessions(in: window).map(\.status))
+            .max { $0.rank < $1.rank }
+    }
+
+    /// The sessions in the active tab whose status asks the user to come and
+    /// look. Hauntty clears them while the user looks at the tab.
+    public func seenClaudeSessions() -> [ClaudeSession] {
+        guard let window = windows.first(where: { $0.id == activeID }) else { return [] }
+        return claudeSessions(in: window).filter(\.status.wantsAttention)
+    }
+
+    /// The Claude Code sessions the window's panes show. Only a pane that runs
+    /// Claude Code shows one, so a shell that kept an old title shows none.
+    /// The pane shows the session named like its title, or the session that
+    /// runs in the pane, while the pane keeps the title it had then.
+    func claudeSessions(in window: TmuxWindow) -> [ClaudeSession] {
+        let shown: [(id: String, title: String)] = window.paneIDs.compactMap { id in
+            let pane = id == window.activePaneID
+                ? PaneReport(command: window.command, title: window.paneTitle) : panes[id]
+            guard let pane, Self.isClaudeProcess(pane.command) else { return nil }
+            return (id, Self.droppingMark(pane.title))
+        }
+        return claudeSessions.filter { session in
+            shown.contains { pane in
+                (session.pane == "\(socketName):\(pane.id)" && Self.droppingMark(session.paneTitle) == pane.title)
+                    || (!pane.title.isEmpty && session.name == pane.title)
+            }
+        }
+    }
 
     /// Replace the windows with the output of `list-windows -F windowListFormat`.
     public func applyWindowList(_ lines: [String]) {
