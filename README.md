@@ -1,20 +1,15 @@
 # hauntty
 
-hauntty is a macOS terminal for working in tmux with agents. It is built
-on libghostty so it renders and reads its config the way Ghostty does.
+hauntty is a macOS terminal for working in tmux with coding agents. I wanted
+a daily driver where I can see which agent needs me. hauntty has a simple
+notification system for agents to use. An agent reports its state, and the tab
+of its tmux window shows it as a colored dot: working, done, blocked or error.
+A state that asks for attention stays until you look at the tab.
+
+It is built on libghostty, so it renders and reads its config the way Ghostty
+does.
 
 ![A hauntty window with three tabs, one of them showing a state dot](docs/screenshot.png)
-
-## Why it exists
-
-I wanted a daily driver that works well with coding agents. Agents such as
-Claude Code run for minutes at a time, and I usually have several going in
-different tmux windows. What I need to know is which window needs me: which
-agent has finished, which is waiting for an answer and which has failed.
-
-hauntty shows that in the tab bar. Each tab has a dot for its window's state:
-working, done, blocked or error. A state that asks for attention stays until
-you look at the tab.
 
 ## How it works
 
