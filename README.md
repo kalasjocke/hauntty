@@ -8,10 +8,13 @@ it renders and reads its config the way Ghostty does.
 
 Running tmux inside a regular terminal gives you two sets of tabs: the
 terminal's own and tmux's status bar. hauntty has only one. Each window holds
-a single Ghostty surface attached to the tmux session `hauntty`, and the tab
-bar shows one native tab per tmux window. tmux owns all the state. Creating,
+a single Ghostty surface running tmux, and the tab bar shows one native tab
+per window of the session it shows. tmux owns all the state. Creating,
 closing, renaming and reordering windows happens in tmux, and the tabs follow.
 Detach, and the session keeps running for the next window or an ssh login.
+
+A new window opens the session `hauntty`. Switch to another session in tmux,
+with `switch-client` or `choose-tree`, and the tabs switch with it.
 
 Coding agents such as Claude Code run for minutes at a time, usually several
 at once in different windows. hauntty shows what each one is doing without

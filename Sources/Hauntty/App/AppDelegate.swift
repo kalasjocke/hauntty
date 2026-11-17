@@ -11,10 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = makeMainMenu()
         ghostty = GhosttyApp()
 
-        // The surface's tmux client creates the session. The control client
-        // waits for it, then keeps the tabs in sync.
+        // The surface runs tmux. The control client waits for the surface's
+        // tmux client, then keeps the tabs in sync with its session.
         let tabs = TabStore()
-        let tmux = ControlClient(executable: Tmux.executable, session: Tmux.sessionName, store: tabs)
+        let tmux = ControlClient(executable: Tmux.executable, store: tabs) { [weak self] in
+            self?.windowController?.paneClient
+        }
         tmux.start()
         self.tmux = tmux
 
