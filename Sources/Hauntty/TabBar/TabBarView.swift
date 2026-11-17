@@ -62,7 +62,7 @@ private struct TabButton: View {
     private let iconGap: CGFloat = 6
 
     var body: some View {
-        MaxWidth(225) {
+        MaxWidth(258) {
             HStack(spacing: iconGap) {
                 PaneStackIcon(
                     symbol: ProcessIcon.symbol(for: command),
