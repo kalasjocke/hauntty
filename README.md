@@ -51,5 +51,5 @@ swift test
 ```
 
 hauntty reads your Ghostty config from `~/.config/ghostty/config`. Its tab
-bar replaces the tmux status bar, so hauntty turns the status bar off for the
-`hauntty` session.
+bar replaces the tmux status bar, so hauntty turns the status bar off for
+every session it shows.

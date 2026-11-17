@@ -260,9 +260,11 @@ public final class ControlClient {
     }
 
     /// Show the pane's session: switch this client to it, or reload if it is
-    /// already there. tmux confirms a switch with `%session-changed`.
+    /// already there. tmux confirms a switch with `%session-changed`. The
+    /// tabs replace the session's status bar, so turn it off.
     private func followPane(to id: String) {
         paneSessionID = id
+        send("set-option -t \(Self.quoted(id)) status off")
         if id == sessionID {
             reload()
         } else {
