@@ -27,8 +27,8 @@ having to switch to it:
   Each tab shows its window's state as a dot.
 - A `done` state shows on background tabs only. hauntty clears it when you
   switch to the tab.
-- A tab that runs Claude Code is titled with the session's name, read from
-  `~/.claude/sessions`.
+- A tab that runs Claude Code is titled with the name of the session it
+  shows, from the pane title Claude Code sets.
 - Each tab shows a tile per pane and an icon for the focused program.
 
 Because the state lives in tmux, scripts and agents can read and set it with
