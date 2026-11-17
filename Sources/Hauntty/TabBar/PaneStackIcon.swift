@@ -46,7 +46,8 @@ struct PaneStackIcon: View {
     private let height: CGFloat = 14
     private let radius: CGFloat = 3.5
     /// How far each tile behind sticks out past the one in front.
-    private let step: CGFloat = 3
+    private static let step: CGFloat = 3
+    private var step: CGFloat { Self.step }
     /// How much smaller each tile behind is than the one in front.
     private let shrink = CGSize(width: 1, height: 1.5)
     /// Fill opacity of the front tile and each one behind it.
@@ -57,7 +58,15 @@ struct PaneStackIcon: View {
     private let shadowBlur: CGFloat = 1.2
     private let shadowOffset: CGFloat = 0.75
 
-    private var others: Int { min(max(paneCount - 1, 0), 2) }
+    private var others: Int { Self.others(paneCount: paneCount) }
+
+    /// How many tiles show behind the front one.
+    private static func others(paneCount: Int) -> Int { min(max(paneCount - 1, 0), 2) }
+
+    /// How much wider the icon is than a single tile, for the tiles behind.
+    static func extraWidth(paneCount: Int) -> CGFloat {
+        step * CGFloat(others(paneCount: paneCount))
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {

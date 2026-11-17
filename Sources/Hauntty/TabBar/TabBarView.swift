@@ -2,7 +2,7 @@ import HaunttyCore
 import SwiftUI
 
 /// One tab per tmux window, each as wide as its icon and title but no wider
-/// than 225 points, inside a translucent grey capsule. The active tab sits on
+/// than 258 points plus the tiles behind its icon, inside a translucent grey capsule. The active tab sits on
 /// a lighter capsule that slides between tabs.
 struct TabBarView: View {
     let store: TabStore
@@ -63,7 +63,9 @@ private struct TabButton: View {
     private let iconGap: CGFloat = 6
 
     var body: some View {
-        MaxWidth(258) {
+        // The tiles behind the icon widen the cap, so a title keeps its width
+        // when the window gets a second or third pane.
+        MaxWidth(258 + PaneStackIcon.extraWidth(paneCount: paneCount)) {
             HStack(spacing: iconGap) {
                 PaneStackIcon(
                     symbol: ProcessIcon.symbol(for: command),
