@@ -5,7 +5,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var ghostty: GhosttyApp!
     private var windowController: TerminalWindowController?
     private var tmux: ControlClient?
-    private var claude: ClaudeSessionWatcher?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = makeMainMenu()
@@ -20,11 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tmux.start()
         self.tmux = tmux
 
-        // Title tabs that run Claude Code after the session.
-        let claude = ClaudeSessionWatcher(store: tabs)
-        claude.start()
-        self.claude = claude
-
         let controller = TerminalWindowController(
             ghostty: ghostty,
             command: Tmux.attachCommand(),
@@ -37,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tmux?.stop()
-        claude?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

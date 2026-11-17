@@ -26,6 +26,9 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
     public var title: String
     /// The process running in the window's focused pane.
     public var command: String
+    /// The focused pane's title, which programs set with an escape
+    /// sequence. Empty until the pane subscription reports it.
+    public var paneTitle: String = ""
     public var paneCount: Int
     public var status: WindowStatus?
     /// The focused pane's id, like `%12`.
@@ -54,8 +57,6 @@ public struct TmuxWindow: Identifiable, Equatable, Sendable {
 public final class TabStore {
     public private(set) var windows: [TmuxWindow] = []
     public private(set) var activeID: String?
-    /// Running Claude Code sessions, by tmux pane id.
-    public private(set) var claudeSessions: [String: ClaudeSession] = [:]
 
     /// The fields the tmux subscription last reported, by window id.
     ///
@@ -65,15 +66,20 @@ public final class TabStore {
     /// subscription has reported a window, its fields win over reloads.
     private var reported: [String: Report] = [:]
 
-    /// The process in each pane, by pane id, as the pane subscription last
-    /// reported it. Like `reported`, it wins over reloads. Keeping every
-    /// pane's process lets a tab show the new focused pane's process as
-    /// soon as tmux says the focus moved.
-    private var paneCommands: [String: String] = [:]
+    /// The process and title of each pane, by pane id, as the pane
+    /// subscription last reported them. Like `reported`, they win over
+    /// reloads. Keeping every pane's lets a tab show the new focused pane's
+    /// as soon as tmux says the focus moved.
+    private var panes: [String: PaneReport] = [:]
 
     fileprivate struct Report: Equatable {
         var index: Int
         var status: WindowStatus?
+        var title: String
+    }
+
+    fileprivate struct PaneReport: Equatable {
+        var command: String
         var title: String
     }
 
@@ -82,8 +88,8 @@ public final class TabStore {
     public static let reportFormat = "#{window_index}|#{@state}|" + titleFormat
 
     /// What the tmux subscription reports for each pane, read by
-    /// `applyPaneReport`.
-    public static let paneReportFormat = "#{pane_current_command}"
+    /// `applyPaneReport`. The title is last so it may contain the separator.
+    public static let paneReportFormat = "#{pane_current_command}|#{pane_title}"
 
     /// The tab title: the window name, as tmux's own status bar shows it.
     ///
@@ -120,13 +126,13 @@ public final class TabStore {
                 status: WindowStatus(rawValue: String(fields[4])),
                 activePaneID: String(fields[5]),
                 paneIDs: fields[6].split(separator: " ").map(String.init))
-            parsed.append(window.applying(reported[window.id], paneCommands: paneCommands))
+            parsed.append(window.applying(reported[window.id], panes: panes))
             if fields[2] == "1" { active = window.id }
         }
         parsed.sort { $0.index < $1.index }
         reported = reported.filter { id, _ in parsed.contains { $0.id == id } }
-        let panes = Set(parsed.flatMap(\.paneIDs))
-        paneCommands = paneCommands.filter { panes.contains($0.key) }
+        let paneIDs = Set(parsed.flatMap(\.paneIDs))
+        panes = panes.filter { paneIDs.contains($0.key) }
 
         // Assign only on change, so observers do not redraw or animate for
         // reloads that change nothing.
@@ -150,26 +156,29 @@ public final class TabStore {
         guard let position = windows.firstIndex(where: { $0.id == windowID }),
               windows[position].index == index
         else { return .needsReload }
-        let window = windows[position].applying(report, paneCommands: paneCommands)
+        let window = windows[position].applying(report, panes: panes)
         if window != windows[position] { windows[position] = window }
         return .applied
     }
 
     /// Apply a subscription value in `paneReportFormat` for one pane.
     public func applyPaneReport(paneID: String, value: String) {
-        paneCommands[paneID] = value
+        let fields = value.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
+        guard fields.count == 2 else { return }
+        panes[paneID] = PaneReport(command: String(fields[0]), title: String(fields[1]))
         for position in windows.indices where windows[position].activePaneID == paneID {
-            if windows[position].command != value { windows[position].command = value }
+            let window = windows[position].applying(nil, panes: panes)
+            if window != windows[position] { windows[position] = window }
         }
     }
 
     /// Apply a `%window-pane-changed` notification: show the newly focused
-    /// pane's process without waiting for a reload.
+    /// pane's process and title without waiting for a reload.
     public func applyActivePane(windowID: String, paneID: String) {
         guard let position = windows.firstIndex(where: { $0.id == windowID }) else { return }
         var window = windows[position]
         window.activePaneID = paneID
-        if let command = paneCommands[paneID] { window.command = command }
+        window = window.applying(nil, panes: panes)
         if window != windows[position] { windows[position] = window }
     }
 
@@ -182,30 +191,37 @@ public final class TabStore {
         }
     }
 
-    /// Replace the running Claude Code sessions.
-    public func applyClaudeSessions(_ sessions: [String: ClaudeSession]) {
-        if sessions != claudeSessions { claudeSessions = sessions }
-    }
-
-    /// The Claude Code session running in a window, preferring the focused
-    /// pane when there is more than one.
-    public func claudeSession(in window: TmuxWindow) -> ClaudeSession? {
-        claudeSessions[window.activePaneID] ?? window.paneIDs.lazy.compactMap { self.claudeSessions[$0] }.first
-    }
-
-    /// Whether the window runs Claude Code, from its session file or its
-    /// process name.
+    /// Whether the window's focused pane runs Claude Code, from its process
+    /// name or the window name tmux gave it.
     public func runsClaude(_ window: TmuxWindow) -> Bool {
-        claudeSession(in: window) != nil || ClaudeSession.isClaudeProcess(window.command)
-            || ClaudeSession.isClaudeProcess(window.title)
+        Self.isClaudeProcess(window.command) || Self.isClaudeProcess(window.title)
     }
 
-    /// The tab title: the Claude Code session's title if one runs in the
-    /// window, or else the window's title from tmux.
+    /// The tab title: the window's title from tmux. When the focused pane
+    /// runs Claude Code, its pane title instead, which Claude Code sets to
+    /// the name of the session it shows.
     public func tabTitle(for window: TmuxWindow) -> String {
-        if let session = claudeSession(in: window) { return session.title }
+        if Self.isClaudeProcess(window.command) {
+            let title = Self.droppingMark(window.paneTitle)
+            if !title.isEmpty { return title }
+        }
         // tmux names a window running Claude Code after its version.
-        return ClaudeSession.isClaudeProcess(window.title) ? "Claude" : window.title
+        return Self.isClaudeProcess(window.title) ? "Claude" : window.title
+    }
+
+    /// Claude Code runs from `~/.local/share/claude/versions/<version>`, so
+    /// tmux sees a process named like `2.1.325`.
+    static func isClaudeProcess(_ command: String) -> Bool {
+        let parts = command.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 3 && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }
+    }
+
+    /// Claude Code puts a mark like `✳ ` before some titles.
+    static func droppingMark(_ title: String) -> String {
+        guard let first = title.first, !first.isLetter, !first.isNumber,
+              title.dropFirst().first == " "
+        else { return title }
+        return String(title.dropFirst(2))
     }
 
     /// Apply a `%window-renamed` notification. tmux sends one for every
@@ -237,9 +253,12 @@ public final class TabStore {
 private extension TmuxWindow {
     /// The window with the subscriptions' fields, except the index, which
     /// only a reload changes so the order stays consistent.
-    func applying(_ report: TabStore.Report?, paneCommands: [String: String]) -> TmuxWindow {
+    func applying(_ report: TabStore.Report?, panes: [String: TabStore.PaneReport]) -> TmuxWindow {
         var window = self
-        if let command = paneCommands[activePaneID] { window.command = command }
+        if let pane = panes[activePaneID] {
+            window.command = pane.command
+            window.paneTitle = pane.title
+        }
         guard let report else { return window }
         window.status = report.status
         window.title = report.title
