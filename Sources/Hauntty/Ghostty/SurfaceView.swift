@@ -192,25 +192,25 @@ final class SurfaceView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let surface else { return }
         ghostty_surface_mouse_button(
-            surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, GhosttyInput.mods(event.modifierFlags))
+            surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, GhosttyInput.mouseMods(event.modifierFlags))
     }
 
     override func mouseUp(with event: NSEvent) {
         guard let surface else { return }
         ghostty_surface_mouse_button(
-            surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, GhosttyInput.mods(event.modifierFlags))
+            surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, GhosttyInput.mouseMods(event.modifierFlags))
         ghostty_surface_mouse_pressure(surface, 0, 0)
     }
 
     override func rightMouseDown(with event: NSEvent) {
         guard let surface, ghostty_surface_mouse_button(
-            surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, GhosttyInput.mods(event.modifierFlags))
+            surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, GhosttyInput.mouseMods(event.modifierFlags))
         else { return super.rightMouseDown(with: event) }
     }
 
     override func rightMouseUp(with event: NSEvent) {
         guard let surface, ghostty_surface_mouse_button(
-            surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, GhosttyInput.mods(event.modifierFlags))
+            surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, GhosttyInput.mouseMods(event.modifierFlags))
         else { return super.rightMouseUp(with: event) }
     }
 
@@ -218,21 +218,21 @@ final class SurfaceView: NSView {
         guard let surface else { return }
         ghostty_surface_mouse_button(
             surface, GHOSTTY_MOUSE_PRESS, GhosttyInput.mouseButton(event.buttonNumber),
-            GhosttyInput.mods(event.modifierFlags))
+            GhosttyInput.mouseMods(event.modifierFlags))
     }
 
     override func otherMouseUp(with event: NSEvent) {
         guard let surface else { return }
         ghostty_surface_mouse_button(
             surface, GHOSTTY_MOUSE_RELEASE, GhosttyInput.mouseButton(event.buttonNumber),
-            GhosttyInput.mods(event.modifierFlags))
+            GhosttyInput.mouseMods(event.modifierFlags))
     }
 
     override func mouseMoved(with event: NSEvent) {
         guard let surface else { return }
         // AppKit's origin is bottom left, Ghostty's is top left.
         let pos = convert(event.locationInWindow, from: nil)
-        ghostty_surface_mouse_pos(surface, pos.x, frame.height - pos.y, GhosttyInput.mods(event.modifierFlags))
+        ghostty_surface_mouse_pos(surface, pos.x, frame.height - pos.y, GhosttyInput.mouseMods(event.modifierFlags))
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -245,7 +245,7 @@ final class SurfaceView: NSView {
         // Drags keep reporting positions after leaving the view.
         if NSEvent.pressedMouseButtons != 0 { return }
         // A negative position tells Ghostty the cursor left the viewport.
-        ghostty_surface_mouse_pos(surface, -1, -1, GhosttyInput.mods(event.modifierFlags))
+        ghostty_surface_mouse_pos(surface, -1, -1, GhosttyInput.mouseMods(event.modifierFlags))
     }
 
     override func mouseDragged(with event: NSEvent) { mouseMoved(with: event) }

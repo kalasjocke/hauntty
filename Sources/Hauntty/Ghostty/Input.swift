@@ -22,6 +22,18 @@ enum GhosttyInput {
         return ghostty_input_mods_e(mods)
     }
 
+    /// Mods for mouse events, with cmd sent as ctrl. Mouse reports have no
+    /// bit for cmd, so a cmd-click would reach tmux and the program in the
+    /// pane as a plain click. As a ctrl-click, programs such as Neovim can
+    /// map it, for example to open the link under the pointer.
+    static func mouseMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+        var raw = mods(flags).rawValue
+        guard raw & GHOSTTY_MODS_SUPER.rawValue != 0 else { return ghostty_input_mods_e(raw) }
+        raw &= ~(GHOSTTY_MODS_SUPER.rawValue | GHOSTTY_MODS_SUPER_RIGHT.rawValue)
+        raw |= GHOSTTY_MODS_CTRL.rawValue
+        return ghostty_input_mods_e(raw)
+    }
+
     /// Translate Ghostty mods back to AppKit modifier flags.
     static func eventModifierFlags(_ mods: ghostty_input_mods_e) -> NSEvent.ModifierFlags {
         var flags = NSEvent.ModifierFlags()
