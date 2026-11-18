@@ -29,6 +29,11 @@
 # into place, so a reader never sees half a file. Claude Code runs no hook when
 # you interrupt a turn, so working stays until the next prompt or the end of
 # the session.
+#
+# Backgrounding a turn interrupts it too. The turn goes on as a new session in
+# a background process, and the old session's record in ~/.claude/sessions
+# names the new session's job as its parkedJobId. Each hook of the new session
+# removes the old session's line, which no hook would end.
 
 input=$(cat)
 field() { printf '%s' "$input" | jq -r "$1"; }
@@ -59,6 +64,12 @@ sid=$(field '.session_id // ""')
 # Tabs and newlines would break the line into fields and lines.
 clean() { printf '%s' "$1" | tr '\t\n' '  '; }
 
+# The sessions that parked this session's job when they were backgrounded.
+parked=$(jq -rs --arg s "$sid" '
+  (map(select(.sessionId == $s))[0].jobId // empty) as $job
+  | .[] | select(.parkedJobId == $job) | .sessionId
+' "$HOME"/.claude/sessions/*.json 2>/dev/null | tr '\n' ' ')
+
 line=
 if [ -n "$state" ]; then
   name=$(jq -r --arg s "$sid" 'select(.sessionId == $s) | .name // empty' \
@@ -86,7 +97,10 @@ exec 9>"$dir/.claude-sessions.lock"
 lockf -s -t 5 9 || exit 0
 
 {
-  [ -f "$file" ] && awk -F '\t' -v id="$(clean "$sid")" '$1 != id' "$file"
+  [ -f "$file" ] && awk -F '\t' -v ids="$(clean "$sid") $parked" '
+    BEGIN { n = split(ids, list, " "); for (i = 1; i <= n; i++) drop[list[i]] = 1 }
+    !($1 in drop)
+  ' "$file"
   [ -n "$line" ] && printf '%s\n' "$line"
 } >"$dir/.claude-sessions.$$"
 mv "$dir/.claude-sessions.$$" "$file"
