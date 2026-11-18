@@ -157,6 +157,19 @@ final class GhosttyApp {
             DispatchQueue.main.async { view.onClose?() }
             return true
 
+        case GHOSTTY_ACTION_OPEN_URL:
+            // libghostty sends this when a link is cmd-clicked, either a URL it
+            // found in the text or an OSC 8 hyperlink.
+            let link = action.action.open_url
+            guard
+                let string = String(
+                    bytes: UnsafeRawBufferPointer(start: link.url, count: Int(link.len)),
+                    encoding: .utf8),
+                let url = URL(string: string)
+            else { return false }
+            DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+            return true
+
         case GHOSTTY_ACTION_SET_TITLE, GHOSTTY_ACTION_RENDER:
             // The tab bar shows tmux state, not terminal titles.
             return true
