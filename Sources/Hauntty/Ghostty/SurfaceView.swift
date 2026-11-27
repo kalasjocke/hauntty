@@ -544,7 +544,7 @@ extension SurfaceView {
             if let plist = item.propertyList(forType: .fileURL),
                let url = NSURL(pasteboardPropertyList: plist, ofType: .fileURL) as URL?,
                url.isFileURL {
-                return .file(path: url.path)
+                return .file(path: Self.readablePath(for: url))
             }
             return item.string(forType: .string).map { .text($0) }
         }
@@ -553,6 +553,28 @@ extension SurfaceView {
         guard length > 0 else { return false }
         text.withCString { ghostty_surface_paste_text(surface, $0, UInt(length)) }
         return true
+    }
+
+    /// A path to the dropped file that the programs in tmux can read.
+    ///
+    /// The floating screenshot thumbnail drops a file in a TemporaryItems
+    /// folder. Dropped on Hauntty, that file can be opened by Hauntty but by
+    /// no other process, so Claude Code in tmux can't read it. Hauntty copies
+    /// such a file to a folder of its own under $TMPDIR and pastes that path.
+    /// Any other file keeps its path.
+    private static func readablePath(for url: URL) -> String {
+        guard url.pathComponents.contains("TemporaryItems") else { return url.path }
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hauntty/drops/\(UUID().uuidString)", isDirectory: true)
+        let copy = folder.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: copy)
+            return copy.path
+        } catch {
+            log.error("Can't copy the dropped file \(url.path): \(error)")
+            return url.path
+        }
     }
 }
 
