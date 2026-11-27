@@ -44,7 +44,6 @@ struct TabBarView: View {
         .gesture(WindowDragGesture())
         .allowsWindowActivationEvents(true)
         .animation(.smooth(duration: 0.2), value: store.windows)
-        .animation(.smooth(duration: 0.2), value: store.activeID)
     }
 }
 
